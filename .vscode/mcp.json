@@ -1,0 +1,16 @@
+{
+    "mcpServers": {
+        "function-store": {
+            "command": "uv",
+            "args": [
+                "run",
+                "--project",
+                "${workspaceFolder}",
+                "--no-sync",
+                "python",
+                "${workspaceFolder}/main.py",
+                "--server"
+            ]
+        }
+    }
+}
