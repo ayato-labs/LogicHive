@@ -1,0 +1,96 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.flakes/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+.env
+.env.*
+
+# DuckDB / SQLite / Local DB
+*.db
+*.duckdb
+*.wal
+*.tmp
+*.parquet
+
+# Data & Settings (Critical: Never publish these!)
+data/
+settings.json
+mcp_config.json
+.gemini/
+.env*
+*.json
+!pyproject.toml
+!package.json
+!mcp_core/**/*.json
+
+# Private Documentation & Tools (IP Protection)
+docs/*
+!docs/design/
+!docs/architecture_overview.md
+!docs/troubleshooting/
+!dev_tools/dev.py
+!dev_tools/__init__.py
+
+# Logs & Temporary files
+*.log
+test_out*.txt
+test_err*.txt
+pytest_fail*.txt
+*.bak
+*.swp
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.mcp_deps/
+.mcp_envs/
+proxy_boot_log.txt
+dev_tool.log
+*.txt
+auth.txt
+perms.txt
+user.txt
+cloud_logs.txt
+it_error*.txt
+tmp_storage/
+LogicHive.spec
+Local_sync_cache/
+
+# Node/Frontend (if any)
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project Launchers (Explicitly allow)
+!*.bat
+!*.sh
+
+# Hub Confidential Intelligence (IP Protection)
+# Allowed in this Private Repo for Deployment:
+!backend/hub/
+!backend/core/config.py
+!backend/core/models.py

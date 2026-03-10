@@ -1,0 +1,29 @@
+[project]
+name = "logichive-hub"
+version = "0.1.0"
+description = "LogicHive: Private Hub Backend"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "httpx",
+    "python-dotenv",
+    "google-genai",
+    "aiosqlite",
+    "numpy",
+    "ollama",
+    "pytest",
+    "pytest-asyncio",
+    "pytest-mock",
+    "python-dateutil",
+    "fastmcp",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["api", "core", "evaluation", "storage"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests", "src/evaluation"]
+asyncio_mode = "auto"

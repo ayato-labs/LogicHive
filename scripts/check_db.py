@@ -1,46 +1,33 @@
-"""Quick diagnostic: check which Supabase project the Hub .env connects to."""
+import asyncio
 import os
-from dotenv import load_dotenv
+import sys
+import aiosqlite
 
-load_dotenv(os.path.join(os.path.dirname(__file__), "..", "LogicHive-Hub-Private", "backend", ".env"))
+# Add src to sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
-url = os.environ.get("SUPABASE_URL", "NOT SET")
-key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "NOT SET")
+from core.config import SQLITE_DB_PATH
 
-print(f"URL: {url}")
-print(f"KEY: {key[:30]}...")
+async def check():
+    print(f"Checking Personal Vault at: {SQLITE_DB_PATH}")
+    if not os.path.exists(SQLITE_DB_PATH):
+        print("ERROR: Database file not found!")
+        return
 
-from supabase import create_client
+    async with aiosqlite.connect(SQLITE_DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        
+        async with db.execute("SELECT count(*) as count FROM logichive_functions") as cursor:
+            row = await cursor.fetchone()
+            print(f"Logic Assets: {row['count']}")
 
-try:
-    sb = create_client(url, key)
-except Exception as e:
-    print(f"CLIENT INIT FAILED: {e}")
-    exit(1)
+        print("\n--- Recent Assets ---")
+        async with db.execute("SELECT name, language, reliability_score FROM logichive_functions ORDER BY created_at DESC LIMIT 10") as cursor:
+            rows = await cursor.fetchall()
+            for r in rows:
+                print(f"  {r['name']} [{r['language']}] (Reliability: {r['reliability_score']})")
 
-print("--- logichive_functions ---")
-try:
-    res = sb.table("logichive_functions").select("name").limit(3).execute()
-    print(f"OK: {len(res.data)} rows")
-    for r in res.data:
-        print(f"  {r['name']}")
-except Exception as e:
-    print(f"FAIL: {e}")
+    print("\nCheck Complete.")
 
-print("--- organizations ---")
-try:
-    res = sb.table("organizations").select("name,plan_type").limit(3).execute()
-    print(f"OK: {len(res.data)} rows")
-    for r in res.data:
-        print(f"  {r['name']} [{r['plan_type']}]")
-except Exception as e:
-    print(f"FAIL: {e}")
-
-print("--- generated_reports ---")
-try:
-    res = sb.table("generated_reports").select("title").limit(1).execute()
-    print(f"OK: {len(res.data)} rows")
-except Exception as e:
-    print(f"FAIL: {e}")
-
-print("DONE")
+if __name__ == "__main__":
+    asyncio.run(check())
