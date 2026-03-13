@@ -22,7 +22,6 @@ last_run.txt
 # Build and Temp
 build/
 dist/
-*.spec
 tmp_storage/
 
 # Node/Frontend
