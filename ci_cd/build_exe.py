@@ -18,21 +18,14 @@ def build():
 
     # Run PyInstaller
     try:
-        # We use the new LogicHive.spec
+        # Run PyInstaller using the spec file
         subprocess.run(["pyinstaller", "--noconfirm", "LogicHive.spec"], check=True)
         print(
             "\n[SUCCESS] Build complete! You can find the executable in the 'dist' folder."
         )
 
-        # Move to a 'release' folder for distribution
-        release_dir = project_root / "release"
-        release_dir.mkdir(exist_ok=True)
-
-        # PyInstaller 'COLLECT' mode creates a directory by default in the spec
-        # Let's zip it for the release
-        shutil.make_archive("release/LogicHive-Windows", "zip", "dist/LogicHive")
-
-        print(f"Zipped release created at {release_dir / 'LogicHive-Windows.zip'}")
+        # Move to a 'release' folder for distribution if needed
+        # (For now, let's just keep it in dist/ for simplicity as per MVP)
 
     except subprocess.CalledProcessError as e:
         print(f"\n[ERROR] Build failed: {e}")
