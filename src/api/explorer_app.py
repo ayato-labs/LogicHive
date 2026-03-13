@@ -4,10 +4,10 @@ import pandas as pd
 import sys
 from pathlib import Path
 
-# Add backend to path
+# Add backend to path before importing local modules
 sys.path.append(str(Path(__file__).parent.parent))
 
-from storage.sqlite_api import sqlite_storage
+from storage.sqlite_api import sqlite_storage  # noqa: E402
 
 # --- MINIMALIST DESIGN ---
 st.set_page_config(
@@ -24,9 +24,11 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+
 async def load_data():
-    # Uses default SYSTEM_ORG_ID inside sqlite_storage
+    # Direct local access to all functions
     return await sqlite_storage.get_all_functions()
+
 
 def main():
     st.title("🛡️ Personal Logic Vault")
@@ -43,7 +45,12 @@ def main():
             c1, c2, c3 = st.columns(3)
             c1.metric("Assets", len(df))
             c2.metric("Executions", df["call_count"].sum() if "call_count" in df else 0)
-            c3.metric("Avg Reliability", f"{df['reliability_score'].mean():.2f}" if "reliability_score" in df else "1.0")
+            c3.metric(
+                "Avg Reliability",
+                f"{df['reliability_score'].mean():.2f}"
+                if "reliability_score" in df
+                else "1.0",
+            )
 
             st.subheader("Asset Audit")
             cols = ["name", "description", "language", "created_at"]
@@ -65,6 +72,7 @@ def main():
         st.write(f"SQLite DB Path: `{sqlite_storage._db_path or 'logichive.db'}`")
         if st.button("Refresh Cache"):
             st.rerun()
+
 
 if __name__ == "__main__":
     main()

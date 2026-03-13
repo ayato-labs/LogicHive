@@ -1,44 +1,76 @@
 import logging
+import aiosqlite
 import json
 import uuid
-import numpy as np
+import asyncio
 from typing import List, Dict, Any, Optional
-from datetime import datetime
 from core.db import get_db_connection
+from core.exceptions import StorageError
+
+from storage.vector_store import vector_manager
+from storage.history_manager import history_manager
 
 logger = logging.getLogger(__name__)
 
+def _safe_json_loads(data: Any, field_name: str) -> Any:
+    """Helper to safely parse JSON strings and log errors."""
+    if not data:
+        return data
+    try:
+        return json.loads(data)
+    except json.JSONDecodeError as e:
+        logger.warning(f"SQLite: Failed to parse JSON for field '{field_name}': {e}. Raw data: {data}")
+        return data  # Return raw as fallback or None depending on preference, returning raw for safety.
 
 class SqliteStorage:
     """
     Simplified SQLite Storage Engine for LogicHive (Personal MVP).
-    Removed SaaS/Multi-tenancy/Billing logic.
+    Direct local access, no multi-tenancy.
     """
 
     def __init__(self):
         self._db_path = None
-        self.SYSTEM_ORG_ID = "00000000-0000-0000-0000-000000000000"
 
-    async def upsert_function(
-        self, function_data: Dict[str, Any], organization_id: Optional[str] = None
-    ) -> bool:
+    async def upsert_function(self, function_data: Dict[str, Any]) -> bool:
         """
-        Inserts or updates a function. Defaults to SYSTEM_ORG_ID.
+        Inserts or updates a function.
         """
-        org_id = organization_id or self.SYSTEM_ORG_ID
         try:
             db = await get_db_connection()
-            
-            # Check if exists to get the same ID
+            db.row_factory = aiosqlite.Row
+
+            # 1. Check if name exists to handle versioning
             async with db.execute(
-                "SELECT id FROM logichive_functions WHERE name = ? AND organization_id = ?",
-                (function_data["name"], org_id),
+                "SELECT id, code, code_hash, version FROM logichive_functions WHERE name = ?",
+                (function_data["name"],),
             ) as cursor:
                 row = await cursor.fetchone()
-                row_id = row[0] if row else str(uuid.uuid4())
+                existing = dict(row) if row else None
+
+            row_id = str(uuid.uuid4())
+            new_version = 1
+
+            if existing:
+                # If code has changed, archive the old version
+                if existing["code_hash"] != function_data["code_hash"]:
+                    new_version = existing["version"] + 1
+
+                    # Get full details of existing to archive
+                    async with db.execute(
+                        "SELECT * FROM logichive_functions WHERE name = ?",
+                        (function_data["name"],),
+                    ) as cursor:
+                        full_existing_row = await cursor.fetchone()
+                        
+                    if full_existing_row:
+                        await history_manager.archive_version(db, dict(full_existing_row))
+                else:
+                    # Unchanged code, we can just return or perform a stay-put update
+                    await db.close()
+                    return True
 
             data = (
-                row_id,
+                existing["id"] if existing else row_id,
                 function_data["name"],
                 function_data["code"],
                 function_data.get("description", ""),
@@ -46,137 +78,156 @@ class SqliteStorage:
                 json.dumps(function_data.get("tags", [])),
                 function_data.get("reliability_score", 1.0),
                 json.dumps(function_data.get("test_metrics", {})),
-                json.dumps(function_data["embedding"]) if "embedding" in function_data else None,
+                json.dumps(function_data["embedding"])
+                if "embedding" in function_data
+                else None,
                 function_data.get("code_hash"),
-                org_id,
+                new_version,
+                json.dumps(function_data.get("dependencies", [])),
+                function_data.get("test_code", ""),
             )
 
             await db.execute(
                 """
-                INSERT INTO logichive_functions 
-                (id, name, code, description, language, tags, reliability_score, test_metrics, embedding, code_hash, organization_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(name, organization_id) DO UPDATE SET
-                code=excluded.code,
-                description=excluded.description,
-                language=excluded.language,
-                tags=excluded.tags,
-                reliability_score=excluded.reliability_score,
-                test_metrics=excluded.test_metrics,
-                embedding=excluded.embedding,
-                code_hash=excluded.code_hash
+                INSERT OR REPLACE INTO logichive_functions 
+                (id, name, code, description, language, tags, reliability_score, test_metrics, embedding, code_hash, version, dependencies, test_code)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 data,
             )
 
             await db.commit()
             await db.close()
-            logger.info(f"SQLite: Successfully saved function '{function_data['name']}'")
+
+            # Incremental FAISS update
+            if "embedding" in function_data:
+                await vector_manager.add_vector(
+                    function_data["name"], function_data["embedding"]
+                )
+
+            logger.info(
+                f"SQLite: Successfully saved version {new_version} of function '{function_data['name']}'"
+            )
             return True
         except Exception as e:
             logger.error(f"SQLite: Failed to save function: {e}")
-            return False
+            raise StorageError(f"Database upsert failed: {e}")
 
     async def find_similar_functions(
         self,
         embedding: List[float],
-        organization_id: Optional[str] = None,
         limit: int = 5,
         match_threshold: float = 0.1,
     ) -> List[Dict[str, Any]]:
-        org_id = organization_id or self.SYSTEM_ORG_ID
         try:
-            db = await get_db_connection()
-            db.row_factory = lambda cursor, row: dict(zip([col[0] for col in cursor.description], row))
-            async with db.execute(
-                "SELECT id, name, description, language, tags, reliability_score, embedding FROM logichive_functions WHERE organization_id = ? AND embedding IS NOT NULL",
-                (org_id,),
-            ) as cursor:
-                rows = await cursor.fetchall()
+            # 1. Initialize Vector Manager if needed
+            if not vector_manager._initialized:
+                db = await get_db_connection()
+                db.row_factory = lambda cursor, row: dict(
+                    zip([col[0] for col in cursor.description], row)
+                )
+                async with db.execute(
+                    "SELECT name, embedding FROM logichive_functions WHERE embedding IS NOT NULL"
+                ) as cursor:
+                    rows = await cursor.fetchall()
+                await db.close()
+                await vector_manager.ensure_initialized(rows)
 
-            await db.close()
-            if not rows:
+            # 2. Perform vector search
+            matches = await vector_manager.search(embedding, limit=limit)
+
+            if not matches:
                 return []
 
-            query_vec = np.array(embedding)
+            # 3. Hydrate results from DB
             results = []
+            db = await get_db_connection()
+            db.row_factory = lambda cursor, row: dict(
+                zip([col[0] for col in cursor.description], row)
+            )
 
-            for row in rows:
-                func_embedding = json.loads(row["embedding"])
-                target_vec = np.array(func_embedding)
+            for name, similarity in matches:
+                if similarity < match_threshold:
+                    continue
 
-                norm_q = np.linalg.norm(query_vec)
-                norm_t = np.linalg.norm(target_vec)
-                if norm_q == 0 or norm_t == 0:
-                    similarity = 0.0
-                else:
-                    similarity = np.dot(query_vec, target_vec) / (norm_q * norm_t)
+                async with db.execute(
+                    "SELECT id, name, description, language, tags, reliability_score FROM logichive_functions WHERE name = ?",
+                    (name,),
+                ) as cursor:
+                    row = await cursor.fetchone()
+                    if row:
+                        res = self._process_row(row)
+                        res["similarity"] = similarity
+                        results.append(res)
 
-                if similarity >= match_threshold:
-                    results.append({
-                        "id": row["id"],
-                        "name": row["name"],
-                        "description": row["description"],
-                        "language": row["language"],
-                        "tags": json.loads(row["tags"]),
-                        "reliability_score": row["reliability_score"],
-                        "similarity": float(similarity),
-                    })
-
-            results.sort(key=lambda x: x["similarity"], reverse=True)
-            return results[:limit]
+            await db.close()
+            return results
         except Exception as e:
             logger.error(f"SQLite: Vector search failed: {e}")
-            return []
+            raise StorageError(f"Search failed: {e}")
 
-    async def get_function_by_name(
-        self, name: str, organization_id: Optional[str] = None
-    ) -> Optional[Dict[str, Any]]:
-        org_id = organization_id or self.SYSTEM_ORG_ID
+    def _process_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        """Helper to parse JSON fields from a database row."""
+        if not row:
+            return None
+        processed = dict(row)
+        
+        if "tags" in processed:
+            processed["tags"] = _safe_json_loads(processed["tags"], "tags")
+        if "test_metrics" in processed:
+            processed["test_metrics"] = _safe_json_loads(processed["test_metrics"], "test_metrics")
+        if "embedding" in processed:
+            processed["embedding"] = _safe_json_loads(processed["embedding"], "embedding")
+        if "dependencies" in processed:
+            processed["dependencies"] = _safe_json_loads(processed["dependencies"], "dependencies")
+
+        return processed
+
+    async def get_function_by_name(self, name: str) -> Optional[Dict[str, Any]]:
         try:
             db = await get_db_connection()
-            db.row_factory = lambda cursor, row: dict(zip([col[0] for col in cursor.description], row))
+            db.row_factory = lambda cursor, row: dict(
+                zip([col[0] for col in cursor.description], row)
+            )
             async with db.execute(
-                "SELECT * FROM logichive_functions WHERE name = ? AND organization_id = ?",
-                (name, org_id),
+                "SELECT * FROM logichive_functions WHERE name = ?",
+                (name,),
             ) as cursor:
                 row = await cursor.fetchone()
             await db.close()
-            return row # Already a dict
+            return self._process_row(row)
         except Exception as e:
             logger.error(f"SQLite: Failed to get function '{name}': {e}")
             return None
 
-    async def get_all_functions(self, organization_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        org_id = organization_id or self.SYSTEM_ORG_ID
+    async def get_all_functions(self) -> List[Dict[str, Any]]:
         try:
             db = await get_db_connection()
-            db.row_factory = lambda cursor, row: dict(zip([col[0] for col in cursor.description], row))
-            async with db.execute(
-                "SELECT * FROM logichive_functions WHERE organization_id = ?",
-                (org_id,),
-            ) as cursor:
+            db.row_factory = lambda cursor, row: dict(
+                zip([col[0] for col in cursor.description], row)
+            )
+            async with db.execute("SELECT * FROM logichive_functions") as cursor:
                 rows = await cursor.fetchall()
             await db.close()
-            return rows # Already a list of dicts
+            return [self._process_row(row) for row in rows]
         except Exception as e:
             logger.error(f"SQLite: Failed to list all functions: {e}")
-            return []
+            raise StorageError(f"Failed to list all functions: {e}")
 
-    async def increment_call_count(self, name: str, organization_id: Optional[str] = None) -> bool:
-        org_id = organization_id or self.SYSTEM_ORG_ID
+    async def increment_call_count(self, name: str) -> bool:
         try:
             db = await get_db_connection()
             await db.execute(
-                "UPDATE logichive_functions SET call_count = call_count + 1 WHERE name = ? AND organization_id = ?",
-                (name, org_id),
+                "UPDATE logichive_functions SET call_count = call_count + 1 WHERE name = ?",
+                (name,),
             )
             await db.commit()
             await db.close()
             return True
         except Exception as e:
             logger.error(f"SQLite: Increment failed for '{name}': {e}")
-            return False
+            raise StorageError(f"Failed to increment call count for '{name}': {e}")
+
 
 # Singleton instance
 sqlite_storage = SqliteStorage()

@@ -12,6 +12,7 @@ from core.config import (
     OLLAMA_MODEL,
     EMBEDDING_MODEL_ID,
 )
+from core.exceptions import AIProviderError
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,7 @@ class LogicIntelligence:
 
         # For generation tasks, we dynamically choose based on availability
         from core.config import GEMINI_MODEL
+
         self.model_id = GEMINI_MODEL
         self.ollama_url = OLLAMA_URL
         self.ollama_model = OLLAMA_MODEL
@@ -70,37 +72,20 @@ class LogicIntelligence:
             logger.error(f"Consolidation: Gemini Embedding (001) failed: {e}")
             return []
 
-    async def optimize_metadata(
-        self, code: str, current_description: str = "", current_tags: List[str] = []
-    ) -> Dict[str, Any]:
-        """Uses AI into generating a high-density technical whitepaper for RAG optimization."""
-        prompt = (
-            f"You are a technical documentation architect for LogicHive.\n"
-            f"Code:\n{code}\n\n"
-            f"Current Description: {current_description}\n"
-            f"Current Tags: {current_tags}\n\n"
-            f"Task: Generate a high-quality technical specification in English.\n"
-            f"The documentation MUST follow this structure:\n"
-            f"1. HIGH-LEVEL PURPOSE: What problem does this solve?\n"
-            f"2. TECHNICAL LOGIC FLOW: Step-by-step breakdown of the internal algorithm.\n"
-            f"3. API SPECIFICATION: Detailed description of arguments, types, and return values.\n"
-            f"4. EDGE CASES & CONSTRAINTS: Potential failure points or performance notes.\n"
-            f"5. USAGE SCENARIO: When should a developer choose this logic?\n\n"
-            f"Also generate 8-12 highly relevant tags.\n"
-            f"CONTEXT: This is for a RAG system. Focus on semantic density and technical precision.\n"
-            f"IMPORTANT: The response must be in English. Respond ONLY in JSON format with keys 'description' and 'tags'."
-        )
-
+    async def _call_llm_async(self, prompt: str, use_json: bool = True) -> Any:
+        """
+        Internal helper to route LLM calls to Gemini or Ollama and handle JSON extraction.
+        """
         provider = await self._get_optimal_provider()
 
         if provider == "gemini":
-            try:
-                if not self.gemini_client:
-                    return {"description": current_description, "tags": current_tags}
+            if not self.gemini_client:
+                return {} if use_json else ""
 
+            try:
                 # Gemma models often don't support response_mime_type="application/json"
-                use_json_mode = "gemma" not in self.model_id.lower()
-                
+                use_json_mode = use_json and "gemma" not in self.model_id.lower()
+
                 config = (
                     types.GenerateContentConfig(response_mime_type="application/json")
                     if use_json_mode
@@ -112,30 +97,34 @@ class LogicIntelligence:
                     contents=[prompt],
                     config=config,
                 )
-                
                 text = response.text
-                # Extremely robust JSON extraction: find the first '{' and last '}'
+
+                if not use_json:
+                    return text.strip()
+
+                # Robust JSON extraction
                 try:
-                    start_idx = text.find('{')
-                    end_idx = text.rfind('}')
+                    start_idx = text.find("{")
+                    end_idx = text.rfind("}")
                     if start_idx != -1 and end_idx != -1:
-                        json_str = text[start_idx:end_idx+1]
-                        data = json.loads(json_str)
-                    else:
-                        raise ValueError("No JSON object found in response.")
-                        
-                    return {
-                        "description": data.get("description", current_description),
-                        "tags": data.get("tags", current_tags),
-                    }
+                        json_str = text[start_idx : end_idx + 1]
+                        parsed = json.loads(json_str)
+                        if isinstance(parsed, list):
+                            return (
+                                parsed[0]
+                                if len(parsed) > 0 and isinstance(parsed[0], dict)
+                                else {}
+                            )
+                        return parsed if isinstance(parsed, dict) else {}
+                    return {}
                 except (json.JSONDecodeError, ValueError) as e:
-                    logger.warning(f"Consolidation: Failed to parse JSON from {self.model_id}. Raw text: {text[:500]}... Error: {e}")
-                    return {"description": current_description, "tags": current_tags}
+                    logger.warning(
+                        f"Consolidation: Failed to parse JSON from {self.model_id}: {e}. Raw content: {text[:200]}..."
+                    )
+                    return {}
             except Exception as e:
-                logger.warning(
-                    f"Consolidation: Gemini Metadata optimization failed for {self.model_id}: {e}"
-                )
-                return {"description": current_description, "tags": current_tags}
+                logger.error(f"Consolidation: Gemini call failed: {e}")
+                raise AIProviderError(f"Gemini generation failed: {e}")
 
         elif provider == "ollama":
             try:
@@ -144,25 +133,93 @@ class LogicIntelligence:
                         f"{self.ollama_url}/api/generate",
                         json={
                             "model": self.ollama_model,
-                            "prompt": prompt + "\nRespond ONLY with JSON.",
+                            "prompt": prompt
+                            + ("\nRespond ONLY with JSON." if use_json else ""),
                             "stream": False,
-                            "format": "json",
+                            "format": "json" if use_json else None,
                         },
                     )
-                    if resp.status_code == 200:
-                        data = json.loads(resp.json().get("response", "{}"))
-                        return {
-                            "description": data.get("description", current_description),
-                            "tags": data.get("tags", current_tags),
-                        }
-                    return {"description": current_description, "tags": current_tags}
-            except Exception as e:
-                logger.warning(
-                    f"Consolidation: Ollama Metadata optimization failed: {e}"
-                )
-                return {"description": current_description, "tags": current_tags}
+                    if resp.status_code != 200:
+                        raise AIProviderError(
+                            f"Ollama returned status {resp.status_code}"
+                        )
 
-        return {"description": current_description, "tags": current_tags}
+                    raw_text = resp.json().get("response", "")
+                    if not use_json:
+                        return raw_text.strip()
+                    return json.loads(raw_text)
+            except Exception as e:
+                logger.error(f"Consolidation: Ollama call failed: {e}")
+                raise AIProviderError(f"Ollama generation failed: {e}")
+
+        raise AIProviderError("No valid AI provider available.")
+
+    async def evaluate_quality(self, code: str) -> Dict[str, Any]:
+        """
+        Evaluates the quality of the given code asset.
+        LogicHive's "Quality Gate" ensures only high-quality, reusable logic is saved.
+        """
+        prompt = (
+            f"You are a Senior Software Architect and strict quality gatekeeper for LogicHive.\n"
+            f"Code to evaluate:\n{code}\n\n"
+            f"Task: Evaluate if this code is a high-quality, reusable, and atomic logic asset.\n"
+            f"CRITICAL REQUIREMENT: Conduct a virtual compilation/linting check.\n"
+            f"1. SYNTAX CHECK: Are there any syntax errors, missing brackets, or obvious reference errors for the specified language?\n"
+            f"   If it is NOT runnable or contains syntax errors, you MUST return a score of 0.\n"
+            f"2. ATOMICITY: Does it solve ONE specific problem well?\n"
+            f"3. REUSABILITY: Is it free from project-specific hardcoded strings or dependencies?\n"
+            f"4. READABILITY: Is the logic clear and well-structured?\n\n"
+            f"Scoring (Integer 0-100):\n"
+            f"- 0: Syntax Error, Missing brackets, or Garbage (REJECT IMMEDIATELY)\n"
+            f"  If the code is NOT runnable or contains syntax errors, you MUST return exactly 0.\n"
+            f"- 1-40: Poor quality or trivial logic (Reject)\n"
+            f"- 41-69: Needs improvement (Reject)\n"
+            f"- 70-100: High quality (Accept)\n\n"
+            f"IMPORTANT: Respond ONLY in JSON format with keys 'score' (int) and 'reason' (string explaining why)."
+        )
+
+        try:
+            res = await self._call_llm_async(prompt, use_json=True)
+        except AIProviderError as e:
+            logger.error(f"Quality Gate: AI Provider failed during evaluation: {e}")
+            # Fallback for transient AI issues if needed, or re-raise
+            raise
+
+        # Robust Score Coercion
+        raw_score = res.get("score", 0)
+        try:
+            if isinstance(raw_score, (int, float)):
+                score = int(raw_score)
+            elif isinstance(raw_score, str):
+                # Handle cases where LLM might return "85"
+                score = int(float(raw_score))
+            elif isinstance(raw_score, dict):
+                # Fallback: find the first numeric value in the dict
+                score = int(next((v for v in raw_score.values() if isinstance(v, (int, float))), 0))
+            else:
+                score = 0
+        except (ValueError, TypeError, StopIteration) as e:
+            logger.error(f"Consolidation: Score coercion failed for input '{raw_score}': {e}")
+            score = 0
+
+        return {
+            "score": score,
+            "reason": res.get("reason", "Failed to obtain evaluation reason."),
+        }
+
+    async def expand_query(self, user_query: str) -> str:
+        """Expands a natural language user query into a dense technical search document."""
+        prompt = (
+            f"You are a technical search architect for LogicHive.\n"
+            f"User Query: {user_query}\n\n"
+            f"Task: Expand this query into technical keywords and implementation patterns in English.\n"
+            f"Focus on semantic density to maximize RAG retrieval accuracy.\n"
+            f"IMPORTANT: Respond ONLY with the expanded keywords. No preamble."
+        )
+
+        expanded = await self._call_llm_async(prompt, use_json=False)
+        return expanded or user_query
+
 
     def construct_search_document(
         self, name: str, description: str, tags: List[str], code: str

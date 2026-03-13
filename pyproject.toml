@@ -17,6 +17,13 @@ dependencies = [
     "pytest-mock",
     "python-dateutil",
     "fastmcp",
+    "faiss-cpu",
+    "radon",
+    "ruff",
+    "mypy",
+    "stripe",
+    "streamlit",
+    "pandas",
 ]
 
 [tool.setuptools.packages.find]

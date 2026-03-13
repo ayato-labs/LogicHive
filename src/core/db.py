@@ -4,15 +4,14 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Default DB Path
-DB_PATH = os.getenv("SQLITE_DB_PATH", "logichive.db")
-
 
 async def get_db_connection() -> aiosqlite.Connection:
     """
     Returns an asynchronus SQLite connection with WAL mode and busy timeout enabled.
+    Evaluates DB_PATH dynamically to support test environment overrides.
     """
-    db = await aiosqlite.connect(DB_PATH)
+    db_path = os.getenv("SQLITE_DB_PATH", "logichive.db")
+    db = await aiosqlite.connect(db_path)
     db.row_factory = aiosqlite.Row
 
     # Enable WAL mode for concurrency

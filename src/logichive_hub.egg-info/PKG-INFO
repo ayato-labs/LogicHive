@@ -1,0 +1,27 @@
+Metadata-Version: 2.4
+Name: logichive-hub
+Version: 0.1.0
+Summary: LogicHive: Private Hub Backend
+Requires-Python: >=3.10
+License-File: LICENSE
+Requires-Dist: fastapi
+Requires-Dist: uvicorn
+Requires-Dist: httpx
+Requires-Dist: python-dotenv
+Requires-Dist: google-genai
+Requires-Dist: aiosqlite
+Requires-Dist: numpy
+Requires-Dist: ollama
+Requires-Dist: pytest
+Requires-Dist: pytest-asyncio
+Requires-Dist: pytest-mock
+Requires-Dist: python-dateutil
+Requires-Dist: fastmcp
+Requires-Dist: faiss-cpu
+Requires-Dist: radon
+Requires-Dist: ruff
+Requires-Dist: mypy
+Requires-Dist: stripe
+Requires-Dist: streamlit
+Requires-Dist: pandas
+Dynamic: license-file

@@ -1,5 +1,6 @@
 from fastmcp import FastMCP
 import orchestrator
+from core.exceptions import LogicHiveError, ValidationError
 
 # Initialize FastMCP server
 mcp = FastMCP("LogicHive")
@@ -21,10 +22,10 @@ async def search_functions(query: str, limit: int = 5) -> str:
     for r in results:
         lang_str = f" [{r.get('language', 'unknown')}]"
         # Use similarity if available (from semantic search)
-        reliability = r.get('reliability_score', 'N/A')
-        if 'similarity' in r:
+        reliability = r.get("reliability_score", "N/A")
+        if "similarity" in r:
             reliability = f"{reliability} | Similarity: {r['similarity']:.2f}"
-            
+
         formatted += f"- **{r['name']}**{lang_str} (Reliability: {reliability})\n  {r.get('description', 'No description')}\n\n"
     return formatted
 
@@ -39,7 +40,7 @@ async def get_function(name: str) -> str:
     f_data = await orchestrator.do_get_async(name)
     if not f_data:
         return f"Function '{name}' not found"
-        
+
     lang = f_data.get("language", "python")
     code = f_data["code"]
     return f"```{lang}\n{code}\n```"
@@ -47,26 +48,47 @@ async def get_function(name: str) -> str:
 
 @mcp.tool()
 async def save_function(
-    name: str, code: str, description: str = "", language: str = "python", tags: list = []
+    name: str,
+    code: str,
+    description: str = "",
+    language: str = "python",
+    tags: list = [],
+    dependencies: list[str] = [],
+    test_code: str = "",
 ) -> str:
     """
-    Save a new high-quality function to the LogicHive vault for future reuse.
+    Save a new high-quality function to the LogicHive vault.
+    
+    IMPORTANT: 'description' and 'tags' are MANDATORY for saving assets.
+    The AI agent calling this tool MUST provide a detailed technical description (at least 10 chars)
+    and a list of relevant tags or the save will be rejected.
+    
     Args:
         name: Name of the asset.
         code: Source code.
-        description: Brief explanation of what it does.
+        description: MANDATORY. Detailed technical specification of the logic.
         language: Programming language (e.g. 'python', 'typescript').
-        tags: Categorization tags.
+        tags: MANDATORY. List of categorization tags.
+        dependencies: External library dependencies (e.g. ['boto3']).
+        test_code: Test code for background validation (Phase 1).
     """
-    # do_save_async now handles metadata optimization and embedding generation
-    success = await orchestrator.do_save_async(
-        name=name, 
-        code=code, 
-        description=description, 
-        tags=tags, 
-        language=language
-    )
-    return "Saved with AI optimization" if success else "Failed"
+    try:
+        success = await orchestrator.do_save_async(
+            name=name,
+            code=code,
+            description=description,
+            tags=tags,
+            language=language,
+            dependencies=dependencies,
+            test_code=test_code,
+        )
+        return "Saved successfully to LogicHive" if success else "Failed (Unknown Error)"
+    except ValidationError as e:
+        return f"Quality Gate REJECTED: {str(e)}"
+    except LogicHiveError as e:
+        return f"LogicHive Error: {str(e)}"
+    except Exception as e:
+        return f"Unexpected Error: {str(e)}"
 
 
 if __name__ == "__main__":

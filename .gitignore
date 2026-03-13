@@ -1,7 +1,4 @@
 # Private Folders (Local Only)
-tests/
-docs/
-scripts/
 .pytest_cache/
 .ruff_cache/
 .venv/
@@ -14,6 +11,13 @@ scripts/
 *.db-shm
 *.db-wal
 logichive.db
+faiss_index.bin
+faiss_mapping.json
+test_*.db
+test_faiss_*.bin
+test_faiss_*.json
+last_run.txt
+*.txt
 
 # Build and Temp
 build/

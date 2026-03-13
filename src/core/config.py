@@ -21,8 +21,8 @@ if IS_CLOUD:
     # Use /tmp for ALL transient operations in the cloud
     DATA_DIR = Path("/tmp/logic-hive")
 else:
-    # Local dev fallback
-    DATA_DIR = Path(os.getenv("FS_DATA_DIR", BASE_DIR / "data"))
+    # Local dev fallback: Consolidate to storage/data at root
+    DATA_DIR = Path(os.getenv("FS_DATA_DIR", BASE_DIR.parent / "storage" / "data"))
 
 
 def get_setting(key: str, default=None):
@@ -59,4 +59,14 @@ EMBEDDING_MODEL_ID = get_setting("EMBEDDING_MODEL_ID", "gemini-embedding-001")
 EXECUTION_MODE = get_setting("FS_EXECUTION_MODE", "auto")
 
 # SQLite Config
-SQLITE_DB_PATH = get_setting("SQLITE_DB_PATH", "logichive.db")
+SQLITE_DB_PATH = get_setting("SQLITE_DB_PATH", str(DATA_DIR / "logichive.db"))
+
+# LogicHive Quality Gate & Storage Thresholds
+QUALITY_GATE_THRESHOLD = int(get_setting("QUALITY_GATE_THRESHOLD", 70))
+DESCRIPTION_MIN_LENGTH = int(get_setting("DESCRIPTION_MIN_LENGTH", 10))
+
+# Vector Search (FAISS) Config
+VECTOR_DIMENSION = int(get_setting("VECTOR_DIMENSION", 768))
+FAISS_GHOST_REBUILD_THRESHOLD = int(get_setting("FAISS_GHOST_REBUILD_THRESHOLD", 10))
+FAISS_INDEX_PATH = get_setting("FAISS_INDEX_PATH", str(DATA_DIR / "faiss_index.bin"))
+FAISS_MAPPING_PATH = get_setting("FAISS_MAPPING_PATH", str(DATA_DIR / "faiss_mapping.json"))

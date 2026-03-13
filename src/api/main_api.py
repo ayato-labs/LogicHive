@@ -1,5 +1,5 @@
 # Function Store REST API (Simplified Personal MVP)
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from orchestrator import (
@@ -7,6 +7,7 @@ from orchestrator import (
     do_save_async,
     do_search_async,
 )
+from core.exceptions import LogicHiveError, ValidationError
 from pydantic import BaseModel
 
 app = FastAPI(
@@ -24,26 +25,31 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # --- Models ---
 class FunctionCreate(BaseModel):
-    name: str # Renamed for clarity
+    name: str  # Renamed for clarity
     code: str
     description: Optional[str] = ""
     tags: Optional[List[str]] = []
     language: Optional[str] = "python"
 
+
 class SearchQuery(BaseModel):
     query: str
     limit: Optional[int] = 5
+
 
 # --- Endpoints ---
 @app.get("/")
 def root():
     return {"message": "LogicHive API", "status": "running", "mode": "personal-mvp"}
 
+
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
+
 
 @app.post("/functions")
 async def create_function(func: FunctionCreate):
@@ -54,11 +60,19 @@ async def create_function(func: FunctionCreate):
             code=func.code,
             description=func.description or "",
             tags=func.tags or [],
-            language=func.language or "python"
+            language=func.language or "python",
         )
         return {"success": success, "name": func.name}
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=422,
+            detail={"message": str(e), "details": getattr(e, "details", {})},
+        )
+    except LogicHiveError as e:
+        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/functions/{function_name}")
 async def get_function(function_name: str):
@@ -71,6 +85,7 @@ async def get_function(function_name: str):
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
 
+
 @app.post("/functions/search")
 async def search(query: SearchQuery):
     """Semantic search for functions."""
@@ -80,7 +95,9 @@ async def search(query: SearchQuery):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 if __name__ == "__main__":
     import uvicorn
+
     print("Starting LogicHive REST API on http://localhost:8000")
     uvicorn.run(app, host="0.0.0.0", port=8000)
