@@ -11,6 +11,7 @@ from core.config import (
     OLLAMA_URL,
     OLLAMA_MODEL,
     EMBEDDING_MODEL_ID,
+    VECTOR_DIMENSION,
 )
 from core.exceptions import AIProviderError
 
@@ -65,7 +66,7 @@ class LogicIntelligence:
             response = self.gemini_client.models.embed_content(
                 model=self.embedding_model,
                 contents=[safe_text],
-                config=types.EmbedContentConfig(output_dimensionality=768),
+                config=types.EmbedContentConfig(output_dimensionality=VECTOR_DIMENSION),
             )
             return response.embeddings[0].values
         except Exception as e:

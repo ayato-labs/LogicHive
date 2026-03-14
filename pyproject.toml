@@ -1,6 +1,6 @@
 [project]
 name = "logichive-hub"
-version = "0.1.0"
+version = "0.3.0"
 description = "LogicHive: Private Hub Backend"
 requires-python = ">=3.10"
 dependencies = [

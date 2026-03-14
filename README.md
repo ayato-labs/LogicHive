@@ -3,78 +3,68 @@
 LogicHiveは、エンジニアが「一度書いた最高の実装」を資産として蓄積し、AIエージェント（Antigravity, Cursor, Gemini等）を通じて瞬時に呼び出し・再利用するためのプライベート・ロジック・ハブです。
 
 ## 🌟 主な特徴
-- **プライベート運用**: SQLite (WALモード) を使用した高速・セキュアなローカル環境。
-- **インテリジェント検索**: ベクトル検索とLLMによるリランキングを組み合わせた高度なセマンティック検索。
-- **エージェント協調**: MCP（Model Context Protocol）を通じて、AIエージェントと対話的にロジックを統合。
+- **プライベート運用**: SQLite (WALモード) と FAISS を使用した高速・セキュアなローカル環境。
+- **堅牢なエラーハンドリング**: 徹底した監査済み例外処理により、沈黙した失敗を防ぎ、信頼性の高い資産管理を実現。
+- **インテリジェント・品質ゲート**: Gemini APIによる自動コード評価を搭載。基準を満たさない低品質なコードの登録を未然に防ぎます。
+- **網羅的なロジック・ハブ**: プロジェクト内部から抽出された 38 以上の高品質な関数・メソッドが既に Vault に登録済み。
+- **エージェント協調**: MCP（Model Context Protocol）を通じて、AIエージェントとシームレスにロジックを統合。
 
 ---
 
 ## 🚀 セットアップ
 
 ### 1. 依存関係のインストール
-`uv` を使用して、プロジェクトの依存関係をインストールします。
+`uv` を使用して、プロジェクトの依存関係をインストール・同期します。
 
 ```powershell
 uv pip install -e .
 ```
 
 ### 2. MCPの登録（自動設定）
-プロジェクトルートにある `register_mcp.bat` を実行してください。以下の設定が自動で行われます。
+プロジェクト内の `scripts/register_mcp.bat` を実行してください。以下の設定が試行されます。
 
-- **`mcp_config.json` の自動編集**: 以下の各エージェントの構成ファイルに `logic-hive` サーバーを登録します。
-    - Antigravity: `~/.gemini/antigravity/mcp_config.json`
-    - Cursor: `%APPDATA%/Cursor/User/globalStorage/heavy.cursor.cursor/mcp_config.json`
-    - Cloud Code: `%APPDATA%/Code/User/globalStorage/googlecloudtools.cloudcode/mcp_config.json`
+- **`mcp_config.json` の自動編集**: 各OSの標準的なMCP構成パスを検出し、`logic-hive` サーバーを登録します。
 - **指示の自動注入**: `~/.gemini/GEMINI.md` 等へ「LogicHiveを活用する」というルールを追記します。
 
 ### 3. システムの起動
-以下のいずれかの方法で LogicHive Hub（APIサーバー）を起動できます。
 
-- **バッチファイルで起動**: プロジェクトルートの `run.bat` をダブルクリックします。
-- **Pythonで起動**: プロジェクトルートで `uv run run.py` を実行します。
-
-起動後、コンソールに表示される「MCP CONFIG HINT」の内容を各エージェントの `mcp_config.json` に設定することで、AIエージェントから LogicHive の機能を利用可能になります。
-
-> [!TIP]
-> ファイルパスは環境によって異なります。手動で設定したい場合やパスを確認したい場合は、`python src/app.py` を実行すると、その環境に最適な JSON 設定例がコンソールに表示されます。
-
----
-
-## 🤖 AIエージェントとの連携
-
-### 🌌 Antigravity
-Antigravityは、`~/.gemini/GEMINI.md` に記載されたルールに従って動作します。
-`register_mcp.bat` を実行すると、自動的に以下のルールが追加されます：
-- `- function-storeっていうMCPを活用してください。`
-
-エージェントが「〜する機能はない？」と尋ねられた際、自動的に LogicHive を検索するようになります。
-
-### ♊ Gemini CLI / Cloud Code
-`mcp_config.json` を通じてツールとして認識されます。
-エージェントに対して直接「LogicHiveで〜を検索して」と指示を出すことが可能です。
+- **Streamlit UI (閲覧・検索)**:
+  `run_ui.bat` をダブルクリックして、ブラウザからVaultの内容を視覚的に確認・検索できます。
+- **MCPサーバー (AIエージェント用)**:
+  エージェントが自動的に起動しますが、手動でテストする場合は以下を実行します：
+  ```powershell
+  uv run src/mcp_server.py
+  ```
 
 ---
 
-## 🔄 開発ワークフロー（思想）
+## 🏗️ ビルドとデプロイ
 
-1. **Request (探索)**: 
-   CursorやAntigravityに「〜する処理が欲しい」とリクエスト。
-2. **Retrieve (抽出)**: 
-   LogicHive MCPが `search_functions` ツールを使用して、過去の良質なロジックを提案。
-3. **Adaptation (適合)**: 
-   エージェントが、提案されたコードを現在のプロジェクトの型や変数名に適合させる。
-   > **Note**: LogicHive側での自動加工は行いません。常に最新で強力な「エージェント側のLLM」に微調整を任せるのが設計思想です。
-4. **Registration (資産化)**: 
-   うまく動作した洗練されたコードを `save_function` で LogicHive に再登録。
+### ローカルでのEXE化
+`uv run python ci_cd/build_exe.py` を実行することで、`dist/LogicHive-MCP.exe` が生成されます。ビルドには `LogicHive.spec` が使用されます。
+
+### GitHub Actions (CI/CD)
+GitHubへプッシュすると、自動的にビルドテストが実行されます。
+- **自動リリース**: `v*` タグ（例: `v0.2.0`）をプッシュすると、自動的にGitHub Releaseが作成され、最新のビルド済み `.exe` が添付されます。
+- **手動実行**: GitHub Actionsタブから `workflow_dispatch` を利用して手動でビルドを開始することも可能です。
 
 ---
 
-## 📄 開発者の権利とライセンス
+## 🤖 AIエージェントとの連携・思想
+
+1. **Request (探索)**: AIエージェントに「〜する処理が欲しい」とリクエスト。
+2. **Retrieve (抽出)**: LogicHive MCPが過去の良質なロジック（38以上の初期登録済みロジックを含む）を提案。
+3. **Adaptation (適合)**: エージェントが、提案されたコードを現在のプロジェクトに適合させる。
+4. **Registration (資産化)**: 洗練されたコードを `save_function` で LogicHive に再登録。品質ゲートが自動で審査します。
+
+---
+
+## 📄 ライセンス
 
 LogicHiveは **PolyForm Shield License 1.0.0** の下で公開されています。
 
 - **個人利用・社内利用**: 完全に無料です。
 - **改変・配布**: 自由に行えます。
-- **🚫 禁止事項**: 本ソフトウェアと **競合する製品またはサービス（SaaS等）を提供すること** は、ライセンスにより明示的に禁止されています。
+- **🚫 禁止事項**: 本ソフトウェアと **競合する製品またはサービス（SaaS等）を提供すること** は禁止されています。
 
-これは、開発者が「一度書いた最高の実装」を守り、大手プラットフォーム等にロジックを無断でSaaS化されることを防ぐための措置です。詳細は [LICENSE](LICENSE) ファイルを参照してください。
+詳細は [LICENSE](LICENSE) を参照してください。

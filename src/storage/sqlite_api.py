@@ -3,6 +3,7 @@ import aiosqlite
 import json
 import uuid
 import asyncio
+from functools import wraps
 from typing import List, Dict, Any, Optional
 from core.db import get_db_connection
 from core.exceptions import StorageError
@@ -11,6 +12,13 @@ from storage.vector_store import vector_manager
 from storage.history_manager import history_manager
 
 logger = logging.getLogger(__name__)
+
+def with_write_lock(func):
+    @wraps(func)
+    async def wrapper(self, *args, **kwargs):
+        async with self._lock:
+            return await func(self, *args, **kwargs)
+    return wrapper
 
 def _safe_json_loads(data: Any, field_name: str) -> Any:
     """Helper to safely parse JSON strings and log errors."""
@@ -30,7 +38,9 @@ class SqliteStorage:
 
     def __init__(self):
         self._db_path = None
+        self._lock = asyncio.Lock()
 
+    @with_write_lock
     async def upsert_function(self, function_data: Dict[str, Any]) -> bool:
         """
         Inserts or updates a function.
@@ -214,6 +224,7 @@ class SqliteStorage:
             logger.error(f"SQLite: Failed to list all functions: {e}")
             raise StorageError(f"Failed to list all functions: {e}")
 
+    @with_write_lock
     async def increment_call_count(self, name: str) -> bool:
         try:
             db = await get_db_connection()
