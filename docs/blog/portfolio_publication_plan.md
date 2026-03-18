@@ -24,7 +24,7 @@
 
 ```powershell
 # setup_gcp_secrets.ps1 (Line 5)
-$GEMINI_API_KEY = "AIzaSyCXEtHU4YONhrUixc4E1LuiqCOR3sixQgg"
+$GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_HERE"
 ```
 
 **これをパブリックリポジトリにPushした瞬間、Googleのボットが検知してAPIキーを即座に無効化する**（最悪の場合、不正利用される）。
