@@ -1,5 +1,4 @@
 import logging
-from typing import Dict, Any
 from .base import BaseEvaluator, EvaluationResult
 from core.consolidation import LogicIntelligence
 from core.config import GEMINI_API_KEY
