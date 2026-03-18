@@ -5,7 +5,7 @@ import uuid
 import asyncio
 from functools import wraps
 from typing import List, Dict, Any, Optional
-from core.db import get_db_connection
+from core.db import get_db_connection, retry_on_db_lock
 from core.exceptions import StorageError
 
 from storage.vector_store import vector_manager
@@ -40,6 +40,7 @@ class SqliteStorage:
         self._db_path = None
         self._lock = asyncio.Lock()
 
+    @retry_on_db_lock()
     @with_write_lock
     async def upsert_function(self, function_data: Dict[str, Any]) -> bool:
         """
@@ -126,9 +127,13 @@ class SqliteStorage:
     async def find_similar_functions(
         self,
         embedding: List[float],
+        query_text: Optional[str] = None,
         limit: int = 5,
         match_threshold: float = 0.1,
     ) -> List[Dict[str, Any]]:
+        """
+        Hybrid Search: Combines Vector Similarity (FAISS) with SQL-based Exact/Keyword matching.
+        """
         try:
             # 1. Initialize Vector Manager if needed
             if not vector_manager._initialized:
@@ -143,20 +148,61 @@ class SqliteStorage:
                 await db.close()
                 await vector_manager.ensure_initialized(rows)
 
-            # 2. Perform vector search
-            matches = await vector_manager.search(embedding, limit=limit)
+            # 2. Perform vector search (Core semantic results)
+            vector_matches = await vector_manager.search(embedding, limit=limit * 2)
 
-            if not matches:
-                return []
+            # 3. Perform SQL Keyword/Tag Search (High-precision results)
+            sql_results = []
+            if query_text:
+                db = await get_db_connection()
+                db.row_factory = lambda cursor, row: dict(
+                    zip([col[0] for col in cursor.description], row)
+                )
 
-            # 3. Hydrate results from DB
-            results = []
+                # Keyword Match (Name) or Tag Match (#tag syntax)
+                search_term = query_text.lower()
+                is_tag_search = search_term.startswith("#")
+                
+                if is_tag_search:
+                    tag_to_find = search_term[1:]
+                    # Check if the tag exists in the JSON array of tags
+                    sql = """
+                    SELECT * FROM logichive_functions 
+                    WHERE EXISTS (
+                        SELECT 1 FROM json_each(tags) WHERE value = ?
+                    )
+                    LIMIT ?
+                    """
+                    params = (tag_to_find, limit)
+                else:
+                    sql = "SELECT * FROM logichive_functions WHERE name LIKE ? LIMIT ?"
+                    params = (f"%{search_term}%", limit)
+
+                async with db.execute(sql, params) as cursor:
+                    sql_rows = await cursor.fetchall()
+                
+                for row in sql_rows:
+                    processed = self._process_row(row)
+                    # Boost SQL hits to ensure they appear high in results if direct match
+                    processed["similarity"] = 1.0 if not is_tag_search else 0.95 
+                    sql_results.append(processed)
+                await db.close()
+
+            # 4. Hydrate and Merge
+            # Priority: Existing name in sql_results > FAISS result
+            final_results = {r["name"]: r for r in sql_results}
+            
             db = await get_db_connection()
             db.row_factory = lambda cursor, row: dict(
                 zip([col[0] for col in cursor.description], row)
             )
 
-            for name, similarity in matches:
+            for name, similarity in vector_matches:
+                if name in final_results:
+                    # Update similarity to be combined/max if already found
+                    final_results[name]["similarity"] = max(final_results[name]["similarity"], similarity)
+                    continue
+                
                 if similarity < match_threshold:
                     continue
 
@@ -164,17 +210,21 @@ class SqliteStorage:
                     "SELECT id, name, description, language, tags, reliability_score FROM logichive_functions WHERE name = ?",
                     (name,),
                 ) as cursor:
-                    row = await cursor.fetchone()
-                    if row:
-                        res = self._process_row(row)
+                    db_row = await cursor.fetchone()
+                    if db_row:
+                        res = self._process_row(db_row)
                         res["similarity"] = similarity
-                        results.append(res)
+                        final_results[name] = res
 
             await db.close()
-            return results
+            
+            # 5. Sort by combined similarity and limit
+            sorted_results = sorted(final_results.values(), key=lambda x: x["similarity"], reverse=True)
+            return sorted_results[:limit]
+
         except Exception as e:
-            logger.error(f"SQLite: Vector search failed: {e}")
-            raise StorageError(f"Search failed: {e}")
+            logger.error(f"SQLite: Hybrid search failed: {e}")
+            raise StorageError(f"Hybrid search failed: {e}")
 
     def _process_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
         """Helper to parse JSON fields from a database row."""
@@ -224,6 +274,7 @@ class SqliteStorage:
             logger.error(f"SQLite: Failed to list all functions: {e}")
             raise StorageError(f"Failed to list all functions: {e}")
 
+    @retry_on_db_lock()
     @with_write_lock
     async def increment_call_count(self, name: str) -> bool:
         try:

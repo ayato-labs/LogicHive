@@ -9,9 +9,14 @@ mcp = FastMCP("LogicHive")
 @mcp.tool()
 async def search_functions(query: str, limit: int = 5) -> str:
     """
-    Search for high-quality code functions in the LogicHive vault using semantic search.
+    Search for high-quality code functions in the LogicHive vault using Hybrid Search.
+    Supports:
+    - Natural language (Semantic Search)
+    - Keywords (Partial name match)
+    - Tags (Use "#tagname" to search by tag)
+    
     Args:
-        query: Natural language description of the logic needed.
+        query: Search term or #tag.
         limit: Max number of results to return.
     """
     results = await orchestrator.do_search_async(query, limit)

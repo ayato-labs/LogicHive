@@ -29,7 +29,7 @@ VECTOR_DIMENSION = int(os.getenv("VECTOR_DIMENSION", 768))
 # ==========================================
 
 # Base Paths
-BASE_DIR = Path(__file__).parent.parent.resolve()
+BASE_DIR = Path(__file__).parent.parent.resolve().absolute()
 PROJECT_ROOT = BASE_DIR.parent.resolve()
 
 # Handle Cloud Run or other container environments
@@ -40,8 +40,8 @@ if IS_CLOUD:
     DATA_DIR = Path("/tmp/logic-hive")
 else:
     # Local dev fallback: Consolidate to storage/data at root
-    DEFAULT_DATA_DIR = BASE_DIR / "storage" / "data"
-    DATA_DIR = Path(os.getenv("DATA_DIR", str(DEFAULT_DATA_DIR))).resolve()
+    DEFAULT_DATA_DIR = (BASE_DIR / "storage" / "data").resolve().absolute()
+    DATA_DIR = Path(os.getenv("DATA_DIR", str(DEFAULT_DATA_DIR))).resolve().absolute()
 
 # Ensure transient directory exists
 try:

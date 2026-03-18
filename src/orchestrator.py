@@ -1,6 +1,7 @@
 import logging
 import ast
 import asyncio
+import re
 from typing import Dict, List, Any, Optional
 from storage.sqlite_api import sqlite_storage
 from core.consolidation import LogicIntelligence
@@ -10,40 +11,59 @@ from core.hash_utils import calculate_code_hash
 from core.notifier import send_notification
 from radon.complexity import cc_visit
 
+from core.evaluation.manager import EvaluationManager
 logger = logging.getLogger(__name__)
 
 # --- Helpers ---
 
-def extract_python_dependencies(code: str) -> List[str]:
+def extract_dependencies(code: str, language: str = "python") -> List[str]:
     """
-    Deterministically extracts top-level imports from Python code using AST.
-    Filters out obvious project-internal relative imports.
+    Extracts dependencies based on language.
+    Python uses AST, while others use optimized regex.
     """
     dependencies = set()
-    try:
-        tree = ast.parse(code)
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                for alias in node.names:
-                    # Get base package name (e.g., 'os' from 'os.path')
-                    base = alias.name.split(".")[0]
-                    dependencies.add(base)
-            elif isinstance(node, ast.ImportFrom):
-                if node.level == 0 and node.module:
-                    base = node.module.split(".")[0]
-                    dependencies.add(base)
-    except SyntaxError as e:
-        logger.error(f"Orchestrator: Syntax error during dependency extraction: {e}")
-        # For personal use, we assume code is generally correct, but syntax error is a hard failure.
-        raise ValidationError(f"Python Syntax Error in provided code: {e}")
-    except Exception as e:
-        logger.error(f"Orchestrator: AST dependency extraction failed unexpectedly: {e}")
-        # In personal mode, we might want to proceed but log the failure clearly.
-        # However, per improvement plan, we should handle this more strictly.
-        raise LogicHiveError(f"Critical failure during dependency extraction: {e}")
+    lang = language.lower()
+
+    if lang == "python":
+        try:
+            tree = ast.parse(code)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        base = alias.name.split(".")[0]
+                        dependencies.add(base)
+                elif isinstance(node, ast.ImportFrom):
+                    if node.level == 0 and node.module:
+                        base = node.module.split(".")[0]
+                        dependencies.add(base)
+        except Exception as e:
+            logger.warning(f"Orchestrator: AST extraction failed, falling back to regex: {e}")
+            # Fallback to regex for Python if AST fails
+            matches = re.findall(r"^(?:import|from)\s+([a-zA-Z0-9_]+)", code, re.MULTILINE)
+            dependencies.update(matches)
     
-    # Filter out common standard libraries to keep the 'recipe' focused on external deps
-    std_lib = {"os", "sys", "json", "math", "datetime", "typing", "asyncio", "logging", "ast", "pathlib", "uuid", "abc"}
+    elif lang in ["typescript", "javascript", "tsx", "jsx"]:
+        # Regex for ES6 imports: from 'pkg' or from "pkg" (robust whitespace)
+        es6_matches = re.findall(r"from\s+['\"]([^'\"./][^'\"]*)['\"]", code)
+        # Regex for CommonJS: require('pkg')
+        cjs_matches = re.findall(r"require\s*\(\s*['\"]([^'\"./][^'\"]*)['\"]\s*\)", code)
+        # Simple import 'pkg'
+        simple_matches = re.findall(r"import\s+['\"]([^'\"./][^'\"]*)['\"]", code)
+        
+        all_matches = es6_matches + cjs_matches + simple_matches
+        for pkg in all_matches:
+            # Extract scope if present (e.g. @types/node -> @types/node, but lodash/fp -> lodash)
+            if pkg.startswith("@"):
+                parts = pkg.split("/")
+                if len(parts) >= 2:
+                    dependencies.add(f"{parts[0]}/{parts[1]}")
+                else:
+                    dependencies.add(pkg)
+            else:
+                dependencies.add(pkg.split("/")[0])
+
+    # Clean up standard libs/internal refs
+    std_lib = {"os", "sys", "json", "math", "datetime", "typing", "asyncio", "logging", "ast", "pathlib", "abc", "fs", "path", "http", "https", "crypto"}
     return sorted(list(dependencies - std_lib))
 
 
@@ -62,98 +82,15 @@ async def do_save_async(
     """
     Includes LLM Quality Gate 2.0 (LLM + Static Analysis), RAG optimization, and versioning.
     """
-    # 1. Static Analysis (Structural Integrity & Complexity)
-    lang = language.lower()
-    static_score = 100
-    static_reason = ""
-
-    if lang == "python":
-        try:
-            ast_tree = ast.parse(code)
-            # 1a. Cyclomatic Complexity
-            blocks = cc_visit(code)
-            if blocks:
-                avg_cc = sum(b.complexity for b in blocks) / len(blocks)
-                if avg_cc > 10:
-                    static_score -= min(30, (avg_cc - 10) * 5)
-                    static_reason += f"High complexity (CC: {avg_cc:.1f}). "
-
-            # 1b. Dependency Check (Pureness)
-            for node in ast.walk(ast_tree):
-                if isinstance(node, ast.Import):
-                    for alias in node.names:
-                        if (
-                            "." in alias.name
-                        ):  # Simple heuristic for project-specific deep imports
-                            static_score -= 5
-                elif isinstance(node, ast.ImportFrom):
-                    if node.level > 0:  # Relative imports
-                        static_score -= 10
-                        static_reason += "Avoid relative imports for atomic logic. "
-
-        except SyntaxError as e:
-            raise ValidationError(f"Python Syntax Error: {e}")
-
-    # 2. Basic Structural Check (Unbalanced brackets check for all languages)
-    # This prevents obviously broken code from even reaching the AI Gate.
-    unbalanced = []
-    pairs = {'(': ')', '[': ']', '{': '}'}
-    stack = []
-    for char in code:
-        if char in pairs:
-            stack.append(char)
-        elif char in pairs.values():
-            if not stack or pairs[stack.pop()] != char:
-                unbalanced.append(char)
-                break
-    if stack or unbalanced:
-        raise ValidationError(f"Quality Gate: Structural error detected (unbalanced brackets).")
-
-    # 3. Calculate code hash for deduplication
-    code_hash = calculate_code_hash(code)
-
-    # 3. Check for unchanged asset
-    existing = await sqlite_storage.get_function_by_name(name)
-    if existing and existing.get("code_hash") == code_hash:
-        logger.info(f"Orchestrator: Skipping save for '{name}' (unchanged hash)")
-        return True
-    # 4. LLM Quality Gate (Gatekeeper)
-    intel = LogicIntelligence(GEMINI_API_KEY)
-
-    # Strict Metadata Validation (Plan A / MVP)
-    if not description or len(description.strip()) < DESCRIPTION_MIN_LENGTH:
-        raise ValidationError(f"Quality Gate: 'description' is mandatory and must be at least {DESCRIPTION_MIN_LENGTH} characters long.")
-    if not tags or not isinstance(tags, list) or len(tags) == 0:
-        raise ValidationError("Quality Gate: 'tags' is mandatory and must contain at least one tag.")
-
-    logger.info(f"Orchestrator: Evaluating quality for '{name}'...")
-    try:
-        quality = await intel.evaluate_quality(code)
-        llm_score = quality.get("score", 0)
-        llm_reason = quality.get("reason", "No reason provided.")
-    except AIProviderError:
-        # Fallback if AI fails: rely on static analysis for Python, else fail
-        logger.warning(
-            "Orchestrator: AI Provider failed. Falling back to static score."
-        )
-        if lang == "python":
-            llm_score = static_score
-            llm_reason = "AI Evaluation unavailable (Fallback to Python static analysis)."
-        else:
-            raise ValidationError("Quality Gate: AI Provider unavailable and no static analyzer for this language.")
-
-    # Quality Gate 2.0: Weighted Score
-    # Python: 50/50 split | Others: 100% LLM
-    if lang == "python":
-        final_score = (llm_score * 0.5) + (static_score * 0.5)
-    else:
-        final_score = float(llm_score)
+    # --- 1. Evaluate Logic Asset (New Plugin System) ---
+    eval_manager = EvaluationManager()
+    eval_res = await eval_manager.evaluate_all(code, language, description=description, tags=tags)
+    
+    final_score = eval_res["score"]
+    reason = eval_res["reason"]
 
     if final_score < QUALITY_GATE_THRESHOLD:
-        reason = f"Weighted Score: {final_score:.1f}. LLM: {llm_reason}"
-        if lang == "python" and static_reason:
-             reason += f" | Static: {static_reason}"
-        logger.warning(f"Orchestrator: Quality Gate REJECTED '{name}' ({reason})")
+        logger.warning(f"Orchestrator: Quality Gate REJECTED '{name}' (Score: {final_score:.1f}, Reason: {reason})")
         raise ValidationError(
             f"Quality Gate rejected asset: {reason}", details={"score": final_score}
         )
@@ -162,17 +99,29 @@ async def do_save_async(
         f"Orchestrator: Quality Gate PASSED '{name}' (Score: {final_score:.1f})"
     )
 
+    # Calculate code hash for deduplication
+    code_hash = calculate_code_hash(code)
+
+    # Check for unchanged asset
+    existing = await sqlite_storage.get_function_by_name(name)
+    if existing and existing.get("code_hash") == code_hash:
+        logger.info(f"Orchestrator: Skipping save for '{name}' (unchanged hash)")
+        return True
+
+    # 3. LLM Metadata Enrichment / Embedding prep
+    intel = LogicIntelligence(GEMINI_API_KEY)
+
     # 6. Generate Embedding for RAG
     search_doc = intel.construct_search_document(
         name, description, tags, code
     )
     embedding = await intel.generate_embedding(search_doc)
 
-    # Automatic Dependency Extraction (Python)
-    if lang == "python" and not dependencies:
-        extracted = extract_python_dependencies(code)
+    # Automatic Dependency Extraction
+    if not dependencies:
+        extracted = extract_dependencies(code, language=language)
         if extracted:
-            logger.info(f"Orchestrator: Auto-extracted dependencies: {extracted}")
+            logger.info(f"Orchestrator: Auto-extracted dependencies ({language}): {extracted}")
             dependencies = extracted
 
     # 7. Final data preparation and save
@@ -206,14 +155,8 @@ async def do_search_async(query: str, limit: int = 5):
 
     query_emb = await intel.generate_embedding(query)
 
-    if query_emb:
-        logger.info("Orchestrator: Performing semantic search")
-        return await sqlite_storage.find_similar_functions(query_emb, limit=limit)
-
-    logger.info(f"Orchestrator: Falling back to static search for '{query}'")
-    # Note: Traditional static search can use the original query or expanded.
-    # For now, keeping it simple as vector search is the main path.
-    return []  # Simplified for MVP
+    logger.info(f"Orchestrator: Performing hybrid search for '{query}'")
+    return await sqlite_storage.find_similar_functions(query_emb, query_text=query, limit=limit)
 
 
 # --- End of Orchestrator ---
