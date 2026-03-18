@@ -197,23 +197,28 @@ class SqliteStorage:
                 zip([col[0] for col in cursor.description], row)
             )
 
+            names_to_hydrate = []
+            similarities = {}
             for name, similarity in vector_matches:
                 if name in final_results:
                     # Update similarity to be combined/max if already found
                     final_results[name]["similarity"] = max(final_results[name]["similarity"], similarity)
-                    continue
-                
-                if similarity < match_threshold:
-                    continue
+                elif similarity >= match_threshold:
+                    if name in similarities:
+                        similarities[name] = max(similarities[name], similarity)
+                    else:
+                        names_to_hydrate.append(name)
+                        similarities[name] = similarity
 
-                async with db.execute(
-                    "SELECT id, name, description, language, tags, reliability_score FROM logichive_functions WHERE name = ?",
-                    (name,),
-                ) as cursor:
-                    db_row = await cursor.fetchone()
-                    if db_row:
+            if names_to_hydrate:
+                placeholders = ", ".join(["?"] * len(names_to_hydrate))
+                sql = f"SELECT id, name, description, language, tags, reliability_score FROM logichive_functions WHERE name IN ({placeholders})"
+                async with db.execute(sql, names_to_hydrate) as cursor:
+                    db_rows = await cursor.fetchall()
+                    for db_row in db_rows:
                         res = self._process_row(db_row)
-                        res["similarity"] = similarity
+                        name = res["name"]
+                        res["similarity"] = similarities[name]
                         final_results[name] = res
 
             await db.close()
