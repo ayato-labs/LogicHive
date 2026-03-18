@@ -196,11 +196,18 @@ class LogicIntelligence:
                 score = int(float(raw_score))
             elif isinstance(raw_score, dict):
                 # Fallback: find the first numeric value in the dict
-                score = int(next((v for v in raw_score.values() if isinstance(v, (int, float))), 0))
+                score = int(
+                    next(
+                        (v for v in raw_score.values() if isinstance(v, (int, float))),
+                        0,
+                    )
+                )
             else:
                 score = 0
         except (ValueError, TypeError, StopIteration) as e:
-            logger.error(f"Consolidation: Score coercion failed for input '{raw_score}': {e}")
+            logger.error(
+                f"Consolidation: Score coercion failed for input '{raw_score}': {e}"
+            )
             score = 0
 
         return {
@@ -220,7 +227,6 @@ class LogicIntelligence:
 
         expanded = await self._call_llm_async(prompt, use_json=False)
         return expanded or user_query
-
 
     def construct_search_document(
         self, name: str, description: str, tags: List[str], code: str

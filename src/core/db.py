@@ -1,5 +1,4 @@
 import aiosqlite
-import os
 import logging
 import asyncio
 from functools import wraps
@@ -8,6 +7,7 @@ logger = logging.getLogger(__name__)
 
 
 from core.config import SQLITE_DB_PATH
+
 
 async def get_db_connection() -> aiosqlite.Connection:
     """
@@ -30,6 +30,7 @@ def retry_on_db_lock(max_retries: int = 5, base_delay: float = 0.1):
     Decorator to retry async database operations on 'database is locked' errors
     using exponential backoff.
     """
+
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -39,7 +40,7 @@ def retry_on_db_lock(max_retries: int = 5, base_delay: float = 0.1):
                     return await func(*args, **kwargs)
                 except aiosqlite.OperationalError as e:
                     if "database is locked" in str(e).lower() and retries < max_retries:
-                        delay = base_delay * (2 ** retries)
+                        delay = base_delay * (2**retries)
                         logger.warning(
                             f"Database locked. Retrying '{func.__name__}' in {delay:.2f}s... "
                             f"(Attempt {retries + 1}/{max_retries})"
@@ -48,5 +49,7 @@ def retry_on_db_lock(max_retries: int = 5, base_delay: float = 0.1):
                         retries += 1
                     else:
                         raise
+
         return wrapper
+
     return decorator

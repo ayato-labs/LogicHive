@@ -1,14 +1,16 @@
 import logging
-from .base import BaseEvaluator, EvaluationResult
+from ..base import BaseEvaluator, EvaluationResult
 from core.consolidation import LogicIntelligence
 from core.config import GEMINI_API_KEY
 
 logger = logging.getLogger(__name__)
 
+
 class AIGateEvaluator(BaseEvaluator):
     """
     Evaluates code quality using LLM-based logic gate.
     """
+
     @property
     def name(self) -> str:
         return "ai_gate"

@@ -16,6 +16,7 @@ from core.exceptions import StorageError
 
 logger = logging.getLogger(__name__)
 
+
 class VectorIndexManager:
     """Manages persistent FAISS index with incremental updates."""
 
@@ -66,7 +67,9 @@ class VectorIndexManager:
                             embeddings.append(vec)
                             names.append(row["name"])
                     except (json.JSONDecodeError, TypeError, KeyError) as e:
-                        logger.warning(f"FAISS: Skipping row '{row.get('name', 'ID ' + str(row.get('id')))}' due to invalid embedding: {e}")
+                        logger.warning(
+                            f"FAISS: Skipping row '{row.get('name', 'ID ' + str(row.get('id')))}' due to invalid embedding: {e}"
+                        )
                         continue
 
             if embeddings:
@@ -86,7 +89,9 @@ class VectorIndexManager:
         async with self._lock:
             # 1. Basic validation
             if len(embedding) != self.dimension:
-                logger.warning(f"FAISS: Dimension mismatch for '{name}'. Expected {self.dimension}, got {len(embedding)}")
+                logger.warning(
+                    f"FAISS: Dimension mismatch for '{name}'. Expected {self.dimension}, got {len(embedding)}"
+                )
                 return
 
             needs_rebuild = False
@@ -95,7 +100,7 @@ class VectorIndexManager:
                 old_id = self.name_to_id[name]
                 if old_id in self.id_to_name:
                     del self.id_to_name[old_id]
-                
+
                 ghost_count = self.index.ntotal - len(self.id_to_name)
                 if ghost_count > FAISS_GHOST_REBUILD_THRESHOLD:
                     needs_rebuild = True
@@ -176,7 +181,9 @@ class VectorIndexManager:
                     f,
                 )
         except Exception as e:
-            logger.error(f"FAISS: Failed to save index to {self._index_path}: {e}", exc_info=True)
+            logger.error(
+                f"FAISS: Failed to save index to {self._index_path}: {e}", exc_info=True
+            )
 
     async def search(self, query_emb: List[float], limit: int = 5) -> List[tuple]:
         if not self._initialized:
@@ -201,6 +208,7 @@ class VectorIndexManager:
                 results.append((name, float(similarities[0][i])))
                 seen_names.add(name)
         return results
+
 
 # Singleton instance
 vector_manager = VectorIndexManager()

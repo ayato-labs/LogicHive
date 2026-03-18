@@ -9,15 +9,22 @@ mcp = FastMCP("LogicHive")
 @mcp.tool()
 async def search_functions(query: str, limit: int = 5) -> str:
     """
-    Search for high-quality code functions in the LogicHive vault using Hybrid Search.
-    Supports:
-    - Natural language (Semantic Search)
-    - Keywords (Partial name match)
-    - Tags (Use "#tagname" to search by tag)
-    
+    Search for high-quality, reusable code functions within the LogicHive vault using Hybrid Search.
+    This is the primary tool for knowledge retrieval. Use it when you need to find existing 
+    implementations or avoid reinventing code.
+
+    SEARCH MODES:
+    1. Semantic Search: Natural language queries (e.g., "authentication helper").
+    2. Exact Match: Function names (e.g., "normalize_llm_args").
+    3. Tag Filter: Use "#tagname" (e.g., "#security").
+
+    INTERPRETING RESULTS:
+    - Results include a 'reliability_score' (0-100). Scores >= 80 are recommended for production.
+    - 'similarity' (0.0-1.0) indicates how well it matches your semantic query.
+
     Args:
-        query: Search term or #tag.
-        limit: Max number of results to return.
+        query: Search term, exact name, or #tag.
+        limit: Max results. Default 5. Use higher limits for broad semantic queries.
     """
     results = await orchestrator.do_search_async(query, limit)
     if not results:
@@ -38,9 +45,11 @@ async def search_functions(query: str, limit: int = 5) -> str:
 @mcp.tool()
 async def get_function(name: str) -> str:
     """
-    Retrieve the exact source code of a function by its name.
+    Fetch the full source code and metadata of a specific function by its exact name.
+    Use this AFTER search_functions if you've identified a promising candidate name.
+
     Args:
-        name: Precise name of the function to fetch.
+        name: The precise, case-sensitive name of the function (e.g., "save_log").
     """
     f_data = await orchestrator.do_get_async(name)
     if not f_data:
@@ -62,20 +71,28 @@ async def save_function(
     test_code: str = "",
 ) -> str:
     """
-    Save a new high-quality function to the LogicHive vault.
-    
-    IMPORTANT: 'description' and 'tags' are MANDATORY for saving assets.
-    The AI agent calling this tool MUST provide a detailed technical description (at least 10 chars)
-    and a list of relevant tags or the save will be rejected.
-    
+    Saves a verified, high-quality code asset to the LogicHive vault for future reuse.
+    The asset undergoes an automated Quality Gate check (AI grading & Static analysis).
+
+    BEST PRACTICES FOR AI AGENTS:
+    1. Metadata is Critical: Provide a detailed 'description' (min 10 chars) explaining 
+       the "why" and "how".
+    2. Taxonomize: Use relevant 'tags' to ensure future discoverability.
+    3. Self-Test: Always include 'test_code' if possible to increase reliability score.
+
+    REJECTION CRITERIA:
+    - Syntax errors (instant Score 0).
+    - Vague descriptions or missing tags.
+    - Poor AI-graded quality (logic flaws, security risks).
+
     Args:
-        name: Name of the asset.
-        code: Source code.
-        description: MANDATORY. Detailed technical specification of the logic.
-        language: Programming language (e.g. 'python', 'typescript').
-        tags: MANDATORY. List of categorization tags.
-        dependencies: External library dependencies (e.g. ['boto3']).
-        test_code: Test code for background validation (Phase 1).
+        name: Unique identifier for the function (e.g., "validate_email_utils").
+        code: The source code implementation.
+        description: Technical specification. Explain edge cases and logic.
+        language: Programming language (lowercase, e.g., 'python', 'typescript').
+        tags: Categorization labels for discovery.
+        dependencies: External libraries required (e.g., ['pandas', 'pydantic']).
+        test_code: Pytest/Unit test code for automated validation.
     """
     try:
         success = await orchestrator.do_save_async(
@@ -87,7 +104,9 @@ async def save_function(
             dependencies=dependencies,
             test_code=test_code,
         )
-        return "Saved successfully to LogicHive" if success else "Failed (Unknown Error)"
+        return (
+            "Saved successfully to LogicHive" if success else "Failed (Unknown Error)"
+        )
     except ValidationError as e:
         return f"Quality Gate REJECTED: {str(e)}"
     except LogicHiveError as e:

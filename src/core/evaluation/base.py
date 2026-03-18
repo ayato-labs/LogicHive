@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 from dataclasses import dataclass
+
 
 @dataclass
 class EvaluationResult:
@@ -8,12 +9,13 @@ class EvaluationResult:
     reason: str
     details: Optional[Dict[str, Any]] = None
 
+
 class BaseEvaluator(ABC):
     """
     Base interface for all LogicHive Evaluators.
     Evaluators analyze code assets and return a score and reasoning.
     """
-    
+
     @property
     @abstractmethod
     def name(self) -> str:

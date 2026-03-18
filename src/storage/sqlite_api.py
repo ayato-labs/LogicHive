@@ -13,12 +13,15 @@ from storage.history_manager import history_manager
 
 logger = logging.getLogger(__name__)
 
+
 def with_write_lock(func):
     @wraps(func)
     async def wrapper(self, *args, **kwargs):
         async with self._lock:
             return await func(self, *args, **kwargs)
+
     return wrapper
+
 
 def _safe_json_loads(data: Any, field_name: str) -> Any:
     """Helper to safely parse JSON strings and log errors."""
@@ -27,8 +30,11 @@ def _safe_json_loads(data: Any, field_name: str) -> Any:
     try:
         return json.loads(data)
     except json.JSONDecodeError as e:
-        logger.warning(f"SQLite: Failed to parse JSON for field '{field_name}': {e}. Raw data: {data}")
+        logger.warning(
+            f"SQLite: Failed to parse JSON for field '{field_name}': {e}. Raw data: {data}"
+        )
         return data  # Return raw as fallback or None depending on preference, returning raw for safety.
+
 
 class SqliteStorage:
     """
@@ -72,9 +78,11 @@ class SqliteStorage:
                         (function_data["name"],),
                     ) as cursor:
                         full_existing_row = await cursor.fetchone()
-                        
+
                     if full_existing_row:
-                        await history_manager.archive_version(db, dict(full_existing_row))
+                        await history_manager.archive_version(
+                            db, dict(full_existing_row)
+                        )
                 else:
                     # Unchanged code, we can just return or perform a stay-put update
                     await db.close()
@@ -128,103 +136,127 @@ class SqliteStorage:
         self,
         embedding: List[float],
         query_text: Optional[str] = None,
+        tags: Optional[List[str]] = None,
         limit: int = 5,
         match_threshold: float = 0.1,
     ) -> List[Dict[str, Any]]:
         """
-        Hybrid Search: Combines Vector Similarity (FAISS) with SQL-based Exact/Keyword matching.
+        Enhanced Hybrid Search: Combines Vector Similarity (FAISS) with SQL-based Keyword/Tag matching.
+
+        Args:
+            embedding: Vector embedding for semantic search.
+            query_text: Optional text for keyword/name/description matching.
+            tags: Optional list of tags for strict filtering.
+            limit: Maximum results to return.
+            match_threshold: Minimum similarity score for vector results.
         """
         try:
             # 1. Initialize Vector Manager if needed
             if not vector_manager._initialized:
                 db = await get_db_connection()
-                db.row_factory = lambda cursor, row: dict(
-                    zip([col[0] for col in cursor.description], row)
-                )
+                db.row_factory = aiosqlite.Row
                 async with db.execute(
                     "SELECT name, embedding FROM logichive_functions WHERE embedding IS NOT NULL"
                 ) as cursor:
-                    rows = await cursor.fetchall()
+                    rows = [dict(r) for r in await cursor.fetchall()]
                 await db.close()
                 await vector_manager.ensure_initialized(rows)
 
             # 2. Perform vector search (Core semantic results)
-            vector_matches = await vector_manager.search(embedding, limit=limit * 2)
+            vector_matches = await vector_manager.search(embedding, limit=limit * 3)
 
             # 3. Perform SQL Keyword/Tag Search (High-precision results)
-            sql_results = []
-            if query_text:
+            sql_results = {}
+            if query_text or tags:
                 db = await get_db_connection()
-                db.row_factory = lambda cursor, row: dict(
-                    zip([col[0] for col in cursor.description], row)
-                )
+                db.row_factory = aiosqlite.Row
 
-                # Keyword Match (Name) or Tag Match (#tag syntax)
-                search_term = query_text.lower()
-                is_tag_search = search_term.startswith("#")
-                
-                if is_tag_search:
-                    tag_to_find = search_term[1:]
-                    # Check if the tag exists in the JSON array of tags
-                    sql = """
-                    SELECT * FROM logichive_functions 
-                    WHERE EXISTS (
-                        SELECT 1 FROM json_each(tags) WHERE value = ?
-                    )
-                    LIMIT ?
-                    """
-                    params = (tag_to_find, limit)
-                else:
-                    sql = "SELECT * FROM logichive_functions WHERE name LIKE ? LIMIT ?"
-                    params = (f"%{search_term}%", limit)
+                conditions = []
+                params = []
 
-                async with db.execute(sql, params) as cursor:
-                    sql_rows = await cursor.fetchall()
-                
-                for row in sql_rows:
-                    processed = self._process_row(row)
-                    # Boost SQL hits to ensure they appear high in results if direct match
-                    processed["similarity"] = 1.0 if not is_tag_search else 0.95 
-                    sql_results.append(processed)
+                # Handle #tag syntax in query_text
+                if query_text and query_text.startswith("#"):
+                    tag_from_text = query_text[1:].lower()
+                    if not tags:
+                        tags = [tag_from_text]
+                    else:
+                        tags.append(tag_from_text)
+                    query_text = None
+
+                # Keyword Match (Name or Description)
+                if query_text:
+                    conditions.append("(name LIKE ? OR description LIKE ?)")
+                    term = f"%{query_text.lower()}%"
+                    params.extend([term, term])
+
+                # Tag Exact Match
+                if tags:
+                    for tag in tags:
+                        conditions.append(
+                            "EXISTS (SELECT 1 FROM json_each(tags) WHERE LOWER(value) = LOWER(?))"
+                        )
+                        params.append(tag)
+
+                if conditions:
+                    where_clause = " AND ".join(conditions)
+                    sql = f"SELECT * FROM logichive_functions WHERE {where_clause} LIMIT {limit * 2}"
+                    async with db.execute(sql, params) as cursor:
+                        sql_rows = await cursor.fetchall()
+
+                    for row in sql_rows:
+                        processed = self._process_row(dict(row))
+                        # Boost SQL hits: 0.9 for keyword, higher if exact name match
+                        score = 0.9
+                        if (
+                            query_text
+                            and processed["name"].lower() == query_text.lower()
+                        ):
+                            score = 1.0
+                        processed["similarity"] = score
+                        sql_results[processed["name"]] = processed
+
                 await db.close()
 
             # 4. Hydrate and Merge
-            # Priority: Existing name in sql_results > FAISS result
-            final_results = {r["name"]: r for r in sql_results}
-            
+            # Priority: Combine Vector similarity with SQL boost
+            final_results = sql_results  # Start with SQL results
+
             db = await get_db_connection()
-            db.row_factory = lambda cursor, row: dict(
-                zip([col[0] for col in cursor.description], row)
-            )
+            db.row_factory = aiosqlite.Row
 
             names_to_hydrate = []
             similarities = {}
+
             for name, similarity in vector_matches:
                 if name in final_results:
-                    # Update similarity to be combined/max if already found
-                    final_results[name]["similarity"] = max(final_results[name]["similarity"], similarity)
+                    # If already in SQL results, combine scores (max or weighted)
+                    # For personal vault, we'll take max to ensure direct matches stay high
+                    final_results[name]["similarity"] = max(
+                        final_results[name]["similarity"], similarity
+                    )
                 elif similarity >= match_threshold:
-                    if name in similarities:
-                        similarities[name] = max(similarities[name], similarity)
-                    else:
-                        names_to_hydrate.append(name)
-                        similarities[name] = similarity
+                    names_to_hydrate.append(name)
+                    similarities[name] = similarity
 
             if names_to_hydrate:
                 placeholders = ", ".join(["?"] * len(names_to_hydrate))
-                sql = f"SELECT id, name, description, language, tags, reliability_score FROM logichive_functions WHERE name IN ({placeholders})"
+                sql = (
+                    f"SELECT * FROM logichive_functions WHERE name IN ({placeholders})"
+                )
                 async with db.execute(sql, names_to_hydrate) as cursor:
                     db_rows = await cursor.fetchall()
                     for db_row in db_rows:
-                        res = self._process_row(db_row)
+                        res = self._process_row(dict(db_row))
                         name = res["name"]
                         res["similarity"] = similarities[name]
                         final_results[name] = res
 
             await db.close()
-            
+
             # 5. Sort by combined similarity and limit
-            sorted_results = sorted(final_results.values(), key=lambda x: x["similarity"], reverse=True)
+            sorted_results = sorted(
+                final_results.values(), key=lambda x: x["similarity"], reverse=True
+            )
             return sorted_results[:limit]
 
         except Exception as e:
@@ -236,15 +268,21 @@ class SqliteStorage:
         if not row:
             return None
         processed = dict(row)
-        
+
         if "tags" in processed:
             processed["tags"] = _safe_json_loads(processed["tags"], "tags")
         if "test_metrics" in processed:
-            processed["test_metrics"] = _safe_json_loads(processed["test_metrics"], "test_metrics")
+            processed["test_metrics"] = _safe_json_loads(
+                processed["test_metrics"], "test_metrics"
+            )
         if "embedding" in processed:
-            processed["embedding"] = _safe_json_loads(processed["embedding"], "embedding")
+            processed["embedding"] = _safe_json_loads(
+                processed["embedding"], "embedding"
+            )
         if "dependencies" in processed:
-            processed["dependencies"] = _safe_json_loads(processed["dependencies"], "dependencies")
+            processed["dependencies"] = _safe_json_loads(
+                processed["dependencies"], "dependencies"
+            )
 
         return processed
 

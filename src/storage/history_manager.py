@@ -1,18 +1,20 @@
 import logging
 import uuid
-import json
 import aiosqlite
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
+
 
 class HistoryManager:
     """Manages versioning and history of logic assets."""
 
-    async def archive_version(self, db: aiosqlite.Connection, existing_row: Dict[str, Any]):
+    async def archive_version(
+        self, db: aiosqlite.Connection, existing_row: Dict[str, Any]
+    ):
         """Moves the current version to the history table."""
         history_id = str(uuid.uuid4())
-        
+
         await db.execute(
             """
             INSERT INTO logichive_function_history 
@@ -36,6 +38,7 @@ class HistoryManager:
         logger.info(
             f"History: Archived version {existing_row['version']} of '{existing_row['name']}'"
         )
+
 
 # Singleton instance
 history_manager = HistoryManager()

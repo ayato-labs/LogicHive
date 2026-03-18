@@ -59,9 +59,13 @@ DESCRIPTION_MIN_LENGTH = int(os.getenv("DESCRIPTION_MIN_LENGTH", 10))
 # Vector Search (FAISS) Config
 FAISS_GHOST_REBUILD_THRESHOLD = int(os.getenv("FAISS_GHOST_REBUILD_THRESHOLD", 10))
 FAISS_INDEX_PATH = os.getenv("FAISS_INDEX_PATH", str(DATA_DIR / "faiss_index.bin"))
-FAISS_MAPPING_PATH = os.getenv("FAISS_MAPPING_PATH", str(DATA_DIR / "faiss_mapping.json"))
+FAISS_MAPPING_PATH = os.getenv(
+    "FAISS_MAPPING_PATH", str(DATA_DIR / "faiss_mapping.json")
+)
 
 # Legacy / Platform Compat
 TRANSPORT = os.getenv("TRANSPORT", "http")
-HUB_URL = os.getenv("HUB_URL", "https://function-store-hub-344411298688.asia-northeast1.run.app")
+HUB_URL = os.getenv(
+    "HUB_URL", "https://function-store-hub-344411298688.asia-northeast1.run.app"
+)
 EXECUTION_MODE = os.getenv("EXECUTION_MODE", "auto")

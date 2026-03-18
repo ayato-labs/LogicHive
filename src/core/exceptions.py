@@ -21,6 +21,8 @@ class StorageError(LogicHiveError):
 class AIProviderError(LogicHiveError):
     """Raised when AI provider (Gemini/Ollama) fails."""
 
+
 class DependencyExtractionError(LogicHiveError):
     """Raised when dependency extraction fails critically."""
+
     pass
