@@ -84,9 +84,19 @@ class VectorIndexManager:
 
     async def add_vector(self, name: str, embedding: List[float]):
         async with self._lock:
+            # 1. Basic validation
+            if len(embedding) != self.dimension:
+                logger.warning(f"FAISS: Dimension mismatch for '{name}'. Expected {self.dimension}, got {len(embedding)}")
+                return
+
             needs_rebuild = False
             if name in self.name_to_id:
-                ghost_count = self.index.ntotal - len(self.name_to_id)
+                # Mark as stale (ghost vector)
+                old_id = self.name_to_id[name]
+                if old_id in self.id_to_name:
+                    del self.id_to_name[old_id]
+                
+                ghost_count = self.index.ntotal - len(self.id_to_name)
                 if ghost_count > FAISS_GHOST_REBUILD_THRESHOLD:
                     needs_rebuild = True
 

@@ -37,7 +37,7 @@ async def test_upsert_and_retrieve_function(test_db):
     assert len(retrieved["embedding"]) == 768
     
     # Assert FAISS index sync
-    assert vector_manager.index.ntotal == 1, "FAISS index should contain exactly 1 vector"
+    assert len(vector_manager.id_to_name) == 1, "FAISS manager should have exactly 1 active mapping"
 
 @pytest.mark.asyncio
 async def test_versioning_on_code_change(test_db):
@@ -74,8 +74,9 @@ async def test_versioning_on_code_change(test_db):
         assert history_row["code_hash"] == "hash1"
     await db.close()
 
-    # Verify FAISS didn't duplicate the vector (should be 1 active vector)
-    assert vector_manager.index.ntotal == 1, "FAISS index should not duplicate vectors on version bumps"
+    # Verify FAISS didn't duplicate the mapping (should be 1 active name)
+    assert len(vector_manager.id_to_name) == 1, "FAISS manager should have exactly 1 active mapping"
+    assert "version_test" in vector_manager.name_to_id
 
 @pytest.mark.asyncio
 async def test_semantic_search_real_faiss(test_db):
