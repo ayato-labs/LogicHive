@@ -28,7 +28,7 @@ class AutoBackupManager:
         Uses GitHub API to ensure a private backup repo exists and is linked.
         """
         if not GITHUB_TOKEN:
-            logger.debug("AutoBackup: GITHUB_TOKEN not set. Skipping automatic repo setup.")
+            logger.error("AutoBackup: GITHUB_TOKEN is missing in .env. Remote sync is disabled.")
             return False
 
         try:
@@ -39,11 +39,19 @@ class AutoBackupManager:
             
             async with httpx.AsyncClient() as client:
                 # 1. Get current user
-                user_res = await client.get("https://api.github.com/user", headers=headers)
-                if user_res.status_code != 200:
-                    logger.warning(f"AutoBackup: Failed to fetch GitHub user: {user_res.text}")
+                logger.debug("AutoBackup: Fetching GitHub user info...")
+                try:
+                    user_res = await client.get("https://api.github.com/user", headers=headers, timeout=10.0)
+                except Exception as e:
+                    logger.error(f"AutoBackup: Network error calling GitHub API: {e}")
                     return False
+
+                if user_res.status_code != 200:
+                    logger.error(f"AutoBackup: GitHub Auth Failed ({user_res.status_code}): {user_res.text}")
+                    return False
+                
                 username = user_res.json()["login"]
+                logger.info(f"AutoBackup: Authenticated as GitHub user: {username}")
                 
                 # 2. Check if repo exists
                 repo_url = f"https://api.github.com/repos/{username}/{self.repo_name}"
@@ -51,7 +59,7 @@ class AutoBackupManager:
                 
                 if check_res.status_code == 404:
                     # 3. Create private repo
-                    logger.info(f"AutoBackup: Creating private repository '{self.repo_name}' for user '{username}'...")
+                    logger.info(f"AutoBackup: Creating private repository '{self.repo_name}'...")
                     create_res = await client.post(
                         "https://api.github.com/user/repos",
                         headers=headers,
@@ -64,24 +72,36 @@ class AutoBackupManager:
                     if create_res.status_code not in (201, 200):
                         logger.error(f"AutoBackup: Repository creation failed: {create_res.text}")
                         return False
+                    logger.info(f"AutoBackup: Successfully created '{self.repo_name}' on GitHub.")
                 
                 # 4. Initialize local git if needed
                 if not os.path.exists(os.path.join(self.export_dir, ".git")):
+                    logger.info(f"AutoBackup: Initializing local Git repository in {self.export_dir}...")
                     os.makedirs(self.export_dir, exist_ok=True)
-                    subprocess.run(["git", "init"], cwd=self.export_dir, capture_output=True)
+                    res_init = subprocess.run(["git", "init"], cwd=self.export_dir, capture_output=True, text=True)
+                    if res_init.returncode != 0:
+                        logger.error(f"AutoBackup: 'git init' failed: {res_init.stderr}")
+                        return False
                     subprocess.run(["git", "branch", "-M", "main"], cwd=self.export_dir, capture_output=True)
                 
                 # 5. Add remote (using token for auth)
+                # Note: We mask the token in logs
                 remote_auth_url = f"https://{GITHUB_TOKEN}@github.com/{username}/{self.repo_name}.git"
                 subprocess.run(["git", "remote", "remove", "origin"], cwd=self.export_dir, capture_output=True)
-                res = subprocess.run(["git", "remote", "add", "origin", remote_auth_url], cwd=self.export_dir, capture_output=True)
+                res_remote = subprocess.run(["git", "remote", "add", "origin", remote_auth_url], cwd=self.export_dir, capture_output=True, text=True)
                 
-                if res.returncode == 0:
+                if res_remote.returncode == 0:
+                    logger.info(f"AutoBackup: Remote 'origin' configured successfully.")
+                    # 6. Pull existing content (like README.md)
+                    logger.debug("AutoBackup: Pulling existing content from remote...")
+                    subprocess.run(["git", "pull", "origin", "main", "--rebase"], cwd=self.export_dir, capture_output=True)
                     self._initialized_remote = True
                     return True
+                else:
+                    logger.error(f"AutoBackup: 'git remote add' failed: {res_remote.stderr}")
                     
         except Exception as e:
-            logger.error(f"AutoBackup: Failed to initialize remote repository: {e}")
+            logger.error(f"AutoBackup: Unexpected error during initialization: {e}")
         return False
         mapping = {
             "python": "py",
@@ -151,12 +171,12 @@ class AutoBackupManager:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
-            await push_proc.communicate()
+            p_out, p_err = await push_proc.communicate()
             
             if push_proc.returncode == 0:
                 logger.info("AutoBackup: Successfully completed bulk backup to GitHub.")
             else:
-                logger.warning("AutoBackup: Bulk push failed.")
+                logger.error(f"AutoBackup: Bulk push failed (code {push_proc.returncode}): {p_err.decode().strip()}")
                 
         except Exception as e:
             logger.error(f"AutoBackup: Bulk sync failed: {e}")
