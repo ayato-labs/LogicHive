@@ -6,7 +6,7 @@ import asyncio
 from functools import wraps
 from typing import List, Dict, Any, Optional
 from core.db import get_db_connection, retry_on_db_lock
-from core.config import VECTOR_DIMENSION
+from core.config import VECTOR_DIMENSION, SQLITE_DB_PATH
 from core.exceptions import StorageError
 
 from storage.vector_store import vector_manager
@@ -43,8 +43,8 @@ class SqliteStorage:
     Direct local access, no multi-tenancy.
     """
 
-    def __init__(self):
-        self._db_path = None
+    def __init__(self, db_path: str = SQLITE_DB_PATH):
+        self.db_path = db_path
         self._lock = asyncio.Lock()
 
     @retry_on_db_lock()
@@ -133,9 +133,23 @@ class SqliteStorage:
             logger.error(f"SQLite: Failed to save function: {e}")
             raise StorageError(f"Database upsert failed: {e}")
 
+    async def list_all_functions(self) -> List[Dict[str, Any]]:
+        """
+        Retrieves all functions from the database without filtering.
+        Used for backup and export utilities.
+        """
+        try:
+            db = await aiosqlite.connect(self.db_path)
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("SELECT * FROM logichive_functions")
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+        except Exception as e:
+            logger.error(f"SQLite: Failed to list all functions: {e}")
+            return []
+
     async def find_similar_functions(
         self,
-        embedding: List[float],
         query_text: Optional[str] = None,
         tags: Optional[List[str]] = None,
         language: Optional[str] = None,

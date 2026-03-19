@@ -16,6 +16,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
 async def force_backup():
     print("=== LogicHive: Force Backup Utility ===")
+    print(f"Using Database: {sqlite_storage.db_path}")
     
     if not GITHUB_TOKEN:
         print("❌ ERROR: GITHUB_TOKEN is not set in your .env file.")
@@ -24,7 +25,7 @@ async def force_backup():
 
     # 1. Fetch all assets from SQLite
     print("Fetching all functions from database...")
-    functions = await sqlite_storage.find_similar_functions(query="", limit=1000)
+    functions = await sqlite_storage.list_all_functions()
     
     if not functions:
         print("⚠ WARNING: No functions found in database to backup.")
