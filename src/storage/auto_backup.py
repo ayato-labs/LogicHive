@@ -120,6 +120,47 @@ class AutoBackupManager:
             
         logger.debug(f"AutoBackup: Exported '{name}' to {self.export_dir}")
 
+    async def bulk_sync_to_git(self) -> None:
+        """
+        Performs a single commit and push for all exported assets.
+        Useful for initial migration or force-backup.
+        """
+        try:
+            if not self._initialized_remote:
+                await self._initialize_remote_repo_api()
+            
+            if not os.path.exists(os.path.join(self.export_dir, ".git")):
+                return
+
+            # Add all
+            await (await asyncio.create_subprocess_exec("git", "add", ".", cwd=self.export_dir)).wait()
+            
+            # Commit
+            commit_proc = await asyncio.create_subprocess_exec(
+                "git", "commit", "-m", "backup: bulk export of all assets", 
+                cwd=self.export_dir,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            await commit_proc.communicate()
+            
+            # Push
+            push_proc = await asyncio.create_subprocess_exec(
+                "git", "push", "-u", "origin", "main",
+                cwd=self.export_dir,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            await push_proc.communicate()
+            
+            if push_proc.returncode == 0:
+                logger.info("AutoBackup: Successfully completed bulk backup to GitHub.")
+            else:
+                logger.warning("AutoBackup: Bulk push failed.")
+                
+        except Exception as e:
+            logger.error(f"AutoBackup: Bulk sync failed: {e}")
+
     async def sync_to_git(self, name: str) -> None:
         """
         Runs git commands in the exports/ directory to sync with the private backup repo.
