@@ -9,6 +9,8 @@ from core.exceptions import ValidationError
 from core.hash_utils import calculate_code_hash
 
 from core.evaluation.manager import EvaluationManager
+from storage.auto_backup import backup_manager
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -165,6 +167,11 @@ async def do_save_async(
     }
 
     save_result = await sqlite_storage.upsert_function(data)
+    
+    # 8. Trigger Background Auto-Backup (Fire-and-forget)
+    if save_result:
+        asyncio.create_task(backup_manager.process_backup(data))
+        
     return save_result
 
 
