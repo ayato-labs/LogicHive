@@ -61,39 +61,71 @@ class AutoBackupManager:
     async def sync_to_git(self, name: str) -> None:
         """
         Runs git commands to commit and push the exports/ folder.
+        Safely handles cases where git is missing or repo is not configured.
         """
         try:
-            # Check if this is a git repo
+            # 1. Check if this is a git repo
             if not os.path.exists(os.path.join(self.base_dir, ".git")):
-                logger.debug("AutoBackup: No .git directory found. Skipping sync.")
+                logger.debug("AutoBackup: No .git directory found. Sync skipped (Local backup only).")
                 return
 
-            # Execute git commands
-            # We use specifically 'exports/' to avoid committing WIP files in other dirs
-            commands = [
-                ["git", "add", "exports/"],
-                ["git", "commit", "-m", f"backup: auto-sync {name}"],
-                ["git", "push"]
-            ]
-            
-            for cmd in commands:
-                process = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    cwd=self.base_dir,
+            # 2. Check if git is installed
+            try:
+                # Use subprocess to check if git command works
+                check_git = await asyncio.create_subprocess_exec(
+                    "git", "--version",
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE
                 )
-                stdout, stderr = await process.communicate()
-                
-                if process.returncode != 0:
-                    err_msg = stderr.decode().strip()
-                    # It's okay if commit fails because there are no changes
-                    if "nothing to commit" in err_msg or "no changes added to commit" in err_msg:
-                        continue
-                    logger.warning(f"AutoBackup: Git command '{' '.join(cmd)}' failed: {err_msg}")
-                    break # Stop if a command fails (except commit-no-change)
+                await check_git.communicate()
+                if check_git.returncode != 0:
+                    logger.warning("AutoBackup: 'git' command returned non-zero. Remote sync disabled.")
+                    return
+            except FileNotFoundError:
+                logger.warning("AutoBackup: 'git' command not found in PATH. Remote sync disabled (Local backup only).")
+                return
+
+            # 3. Execute git commands
+            # We use specifically 'exports/' to avoid committing WIP files in other dirs
+            # Note: 'git push' might fail if no remote is set, we handle that individually.
             
-            logger.info(f"AutoBackup: Successfully synced '{name}' to GitHub.")
+            # Step A: Add
+            await (await asyncio.create_subprocess_exec("git", "add", "exports/", cwd=self.base_dir)).wait()
+            
+            # Step B: Commit
+            commit_proc = await asyncio.create_subprocess_exec(
+                "git", "commit", "-m", f"backup: auto-sync {name}", 
+                cwd=self.base_dir,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await commit_proc.communicate()
+            
+            # Step C: Push (Check if remote exists first)
+            remote_proc = await asyncio.create_subprocess_exec(
+                "git", "remote",
+                cwd=self.base_dir,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            r_out, _ = await remote_proc.communicate()
+            if b"origin" not in r_out:
+                logger.info(f"AutoBackup: No 'origin' remote found. Local commit only for '{name}'.")
+                return
+
+            push_proc = await asyncio.create_subprocess_exec(
+                "git", "push", "origin", "main",
+                cwd=self.base_dir,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            p_out, p_err = await push_proc.communicate()
+            
+            if push_proc.returncode == 0:
+                logger.info(f"AutoBackup: Successfully synced '{name}' to GitHub.")
+            else:
+                logger.warning(f"AutoBackup: Git push failed: {p_err.decode().strip()}")
+                
         except Exception as e:
             logger.error(f"AutoBackup: Git sync failed for '{name}': {e}")
 
