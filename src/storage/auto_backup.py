@@ -3,8 +3,9 @@ import json
 import logging
 import asyncio
 import subprocess
+import httpx
 from typing import Dict, Any
-from core.config import ENABLE_AUTO_BACKUP
+from core.config import ENABLE_AUTO_BACKUP, GITHUB_TOKEN
 
 logger = logging.getLogger(__name__)
 
@@ -19,8 +20,69 @@ class AutoBackupManager:
             base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
         self.base_dir = base_dir
         self.export_dir = os.path.join(self.base_dir, "exports")
+        self.repo_name = "logichive-vault-backup"
+        self._initialized_remote = False
         
-    def _get_extension(self, language: str) -> str:
+    async def _initialize_remote_repo_api(self) -> bool:
+        """
+        Uses GitHub API to ensure a private backup repo exists and is linked.
+        """
+        if not GITHUB_TOKEN:
+            logger.debug("AutoBackup: GITHUB_TOKEN not set. Skipping automatic repo setup.")
+            return False
+
+        try:
+            headers = {
+                "Authorization": f"token {GITHUB_TOKEN}",
+                "Accept": "application/vnd.github.v3+json"
+            }
+            
+            async with httpx.AsyncClient() as client:
+                # 1. Get current user
+                user_res = await client.get("https://api.github.com/user", headers=headers)
+                if user_res.status_code != 200:
+                    logger.warning(f"AutoBackup: Failed to fetch GitHub user: {user_res.text}")
+                    return False
+                username = user_res.json()["login"]
+                
+                # 2. Check if repo exists
+                repo_url = f"https://api.github.com/repos/{username}/{self.repo_name}"
+                check_res = await client.get(repo_url, headers=headers)
+                
+                if check_res.status_code == 404:
+                    # 3. Create private repo
+                    logger.info(f"AutoBackup: Creating private repository '{self.repo_name}' for user '{username}'...")
+                    create_res = await client.post(
+                        "https://api.github.com/user/repos",
+                        headers=headers,
+                        json={
+                            "name": self.repo_name,
+                            "private": True,
+                            "description": "LogicHive Vault Auto-Backup"
+                        }
+                    )
+                    if create_res.status_code not in (201, 200):
+                        logger.error(f"AutoBackup: Repository creation failed: {create_res.text}")
+                        return False
+                
+                # 4. Initialize local git if needed
+                if not os.path.exists(os.path.join(self.export_dir, ".git")):
+                    os.makedirs(self.export_dir, exist_ok=True)
+                    subprocess.run(["git", "init"], cwd=self.export_dir, capture_output=True)
+                    subprocess.run(["git", "branch", "-M", "main"], cwd=self.export_dir, capture_output=True)
+                
+                # 5. Add remote (using token for auth)
+                remote_auth_url = f"https://{GITHUB_TOKEN}@github.com/{username}/{self.repo_name}.git"
+                subprocess.run(["git", "remote", "remove", "origin"], cwd=self.export_dir, capture_output=True)
+                res = subprocess.run(["git", "remote", "add", "origin", remote_auth_url], cwd=self.export_dir, capture_output=True)
+                
+                if res.returncode == 0:
+                    self._initialized_remote = True
+                    return True
+                    
+        except Exception as e:
+            logger.error(f"AutoBackup: Failed to initialize remote repository: {e}")
+        return False
         mapping = {
             "python": "py",
             "javascript": "js",
@@ -60,18 +122,19 @@ class AutoBackupManager:
 
     async def sync_to_git(self, name: str) -> None:
         """
-        Runs git commands to commit and push the exports/ folder.
-        Safely handles cases where git is missing or repo is not configured.
+        Runs git commands in the exports/ directory to sync with the private backup repo.
         """
         try:
-            # 1. Check if this is a git repo
-            if not os.path.exists(os.path.join(self.base_dir, ".git")):
-                logger.debug("AutoBackup: No .git directory found. Sync skipped (Local backup only).")
+            # Try to initialize if not already done
+            if not self._initialized_remote:
+                await self._initialize_remote_repo_api()
+
+            # 1. Check if exports exists and is a git repo
+            if not os.path.exists(os.path.join(self.export_dir, ".git")):
                 return
 
             # 2. Check if git is installed
             try:
-                # Use subprocess to check if git command works
                 check_git = await asyncio.create_subprocess_exec(
                     "git", "--version",
                     stdout=asyncio.subprocess.PIPE,
@@ -79,55 +142,37 @@ class AutoBackupManager:
                 )
                 await check_git.communicate()
                 if check_git.returncode != 0:
-                    logger.warning("AutoBackup: 'git' command returned non-zero. Remote sync disabled.")
                     return
             except FileNotFoundError:
-                logger.warning("AutoBackup: 'git' command not found in PATH. Remote sync disabled (Local backup only).")
                 return
 
-            # 3. Execute git commands
-            # We use specifically 'exports/' to avoid committing WIP files in other dirs
-            # Note: 'git push' might fail if no remote is set, we handle that individually.
-            
-            # Step A: Add
-            await (await asyncio.create_subprocess_exec("git", "add", "exports/", cwd=self.base_dir)).wait()
+            # 3. Execute git commands WITHIN exports/
+            # Step A: Add all changes in exports/
+            await (await asyncio.create_subprocess_exec("git", "add", ".", cwd=self.export_dir)).wait()
             
             # Step B: Commit
             commit_proc = await asyncio.create_subprocess_exec(
-                "git", "commit", "-m", f"backup: auto-sync {name}", 
-                cwd=self.base_dir,
+                "git", "commit", "-m", f"backup: {name}", 
+                cwd=self.export_dir,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
-            stdout, stderr = await commit_proc.communicate()
+            await commit_proc.communicate()
             
-            # Step C: Push (Check if remote exists first)
-            remote_proc = await asyncio.create_subprocess_exec(
-                "git", "remote",
-                cwd=self.base_dir,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            r_out, _ = await remote_proc.communicate()
-            if b"origin" not in r_out:
-                logger.info(f"AutoBackup: No 'origin' remote found. Local commit only for '{name}'.")
-                return
-
+            # Step C: Push to private remote
             push_proc = await asyncio.create_subprocess_exec(
-                "git", "push", "origin", "main",
-                cwd=self.base_dir,
+                "git", "push", "-u", "origin", "main",
+                cwd=self.export_dir,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
-            p_out, p_err = await push_proc.communicate()
+            await push_proc.communicate()
             
             if push_proc.returncode == 0:
-                logger.info(f"AutoBackup: Successfully synced '{name}' to GitHub.")
-            else:
-                logger.warning(f"AutoBackup: Git push failed: {p_err.decode().strip()}")
-                
+                logger.info(f"AutoBackup: Successfully backed up '{name}' to private repository.")
+            
         except Exception as e:
-            logger.error(f"AutoBackup: Git sync failed for '{name}': {e}")
+            logger.error(f"AutoBackup: Private Git sync failed for '{name}': {e}")
 
     async def process_backup(self, data: Dict[str, Any]) -> None:
         """
