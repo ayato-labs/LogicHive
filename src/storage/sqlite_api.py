@@ -193,11 +193,20 @@ class SqliteStorage:
                         tags.append(tag_from_text)
                     query_text = None
 
-                # Keyword Match (Name or Description)
+                # Keyword Match (Name or Description) - Support multi-word matching
                 if query_text:
-                    conditions.append("(name LIKE ? OR description LIKE ?)")
-                    term = f"%{query_text.lower()}%"
-                    params.extend([term, term])
+                    words = [w.strip() for w in query_text.split() if len(w.strip()) > 2]
+                    if not words: # Fallback for very short queries
+                        words = [query_text.strip()]
+                    
+                    word_conditions = []
+                    for word in words:
+                        word_conditions.append("(name LIKE ? OR description LIKE ?)")
+                        term = f"%{word.lower()}%"
+                        params.extend([term, term])
+                    
+                    if word_conditions:
+                        conditions.append(f"({' OR '.join(word_conditions)})")
 
                 # Tag Exact Match
                 if tags:

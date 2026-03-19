@@ -228,6 +228,66 @@ class LogicIntelligence:
         expanded = await self._call_llm_async(prompt, use_json=False)
         return expanded or user_query
 
+    async def rerank_results(
+        self, query: str, results: List[Dict[str, Any]], limit: int = 5
+    ) -> List[Dict[str, Any]]:
+        """
+        Re-ranks search results using LLM reasoning to ensure the most relevant code is first.
+        """
+        if not results:
+            return []
+
+        # Only re-rank top N to save tokens/time
+        candidates = results[:15]
+        
+        # Prepare candidates for LLM review (Name + Description + Code snippet)
+        formatted_candidates = []
+        for i, res in enumerate(candidates):
+            code_snippet = res["code"][:500] + "..." if len(res["code"]) > 500 else res["code"]
+            formatted_candidates.append(
+                f"ID: {i}\nNAME: {res['name']}\nDESC: {res['description']}\nCODE:\n{code_snippet}\n---"
+            )
+
+        prompt = (
+            f"User Query: {query}\n\n"
+            f"Below are {len(candidates)} potential code assets from LogicHive.\n"
+            f"Task: Rank these candidates based on how accurately they solve the User Query.\n\n"
+            f"{chr(10).join(formatted_candidates)}\n\n"
+            f"IMPORTANT: Respond ONLY with a JSON list of IDs in order of relevance (e.g. [2, 0, 1]).\n"
+            f"The first ID in the list MUST be the most relevant one."
+        )
+
+        try:
+            # We use a custom call to get the JSON list
+            raw_res = await self._call_llm_async(prompt, use_json=False)
+            # Try to extract list from response
+            import re
+            match = re.search(r"\[[\d,\s]+\]", raw_res)
+            if match:
+                ordered_ids = json.loads(match.group(0))
+                
+                # Re-order based on LLM feedback
+                reranked = []
+                seen_ids = set()
+                for idx in ordered_ids:
+                    if 0 <= idx < len(candidates) and idx not in seen_ids:
+                        reranked.append(candidates[idx])
+                        seen_ids.add(idx)
+                
+                # Add any missing candidates at the end
+                for i, c in enumerate(candidates):
+                    if i not in seen_ids:
+                        reranked.append(c)
+                
+                # Combine with the rest of the original results
+                final_results = reranked + results[15:]
+                logger.info(f"Consolidation: Re-ranking complete for '{query}'")
+                return final_results[:limit]
+        except Exception as e:
+            logger.warning(f"Consolidation: Re-ranking failed: {e}. Falling back to original order.")
+        
+        return results[:limit]
+
     def construct_search_document(
         self, name: str, description: str, tags: List[str], code: str
     ) -> str:

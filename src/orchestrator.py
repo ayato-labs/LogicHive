@@ -174,15 +174,23 @@ async def do_get_async(name: str) -> Optional[Dict[str, Any]]:
 
 
 async def do_search_async(query: str, limit: int = 5, language: Optional[str] = None):
-    """Asynchronous implementation for searching functions with Query Expansion and Filtering."""
+    """Asynchronous implementation for searching functions with Query Expansion and Re-ranking."""
     intel = LogicIntelligence(GEMINI_API_KEY)
 
     query_emb = await intel.generate_embedding(query)
 
     logger.info(f"Orchestrator: Performing hybrid search for '{query}' (Lang: {language})")
-    return await sqlite_storage.find_similar_functions(
-        query_emb, query_text=query, limit=limit, language=language
+    
+    # 1. Fetch more candidates than requested for re-ranking (limit * 3)
+    initial_results = await sqlite_storage.find_similar_functions(
+        query_emb, query_text=query, limit=limit * 3, language=language
     )
+    
+    # 2. Re-rank using LLM
+    logger.info(f"Orchestrator: Re-ranking {len(initial_results)} candidates...")
+    reranked_results = await intel.rerank_results(query, initial_results, limit=limit)
+    
+    return reranked_results
 
 
 # --- End of Orchestrator ---
