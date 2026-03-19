@@ -1,0 +1,14 @@
+{
+    "name": "backup_test_function",
+    "code": "def backup_test(): return 'backup works'",
+    "description": "A test function for auto-backup verification.",
+    "language": "python",
+    "tags": [
+        "test",
+        "backup"
+    ],
+    "reliability_score": 0.9,
+    "code_hash": "2983cbb1b069025c2890d3a858595c6523c9761db2b9656e41bf3c763d97d145",
+    "dependencies": [],
+    "test_code": ""
+}
