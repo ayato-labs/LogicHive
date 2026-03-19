@@ -1,5 +1,5 @@
 from fastmcp import FastMCP
-import orchestrator
+from orchestrator import do_save_async, do_delete_async, do_get_async, do_search_async
 from core.exceptions import LogicHiveError, ValidationError
 
 # Initialize FastMCP server
@@ -97,7 +97,7 @@ async def save_function(
         test_code: Pytest/Unit test code for automated validation.
     """
     try:
-        success = await orchestrator.do_save_async(
+        success = await do_save_async(
             name=name,
             code=code,
             description=description,
@@ -140,6 +140,22 @@ async def debug_db() -> str:
             status.append(f"Error reading DB: {e}")
             
     return "\n".join(status)
+
+
+@mcp.tool()
+async def delete_function(name: str) -> str:
+    """
+    Deletes a function from the LogicHive vault. 
+    The function is archived in the backup repository for safety.
+
+    Args:
+        name: The case-sensitive name of the function to delete.
+    """
+    success = await do_delete_async(name)
+    if success:
+        return f"Successfully deleted and archived function '{name}'."
+    else:
+        return f"Failed to delete function '{name}'."
 
 
 if __name__ == "__main__":

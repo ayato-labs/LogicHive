@@ -4,7 +4,7 @@ import logging
 import asyncio
 import subprocess
 import httpx
-from typing import Dict, Any
+from typing import Any
 from core.config import ENABLE_AUTO_BACKUP, GITHUB_TOKEN
 
 logger = logging.getLogger(__name__)
@@ -114,7 +114,7 @@ class AutoBackupManager:
         }
         return mapping.get(language.lower(), "txt")
 
-    async def export_asset(self, data: Dict[str, Any]) -> None:
+    async def export_asset(self, data: dict[str, Any]) -> None:
         """
         Exports the asset (code and metadata) to the exports/ directory.
         """
@@ -183,31 +183,29 @@ class AutoBackupManager:
         except Exception as e:
             logger.error(f"AutoBackup: Bulk sync failed: {e}")
 
-    async def restore_from_git(self) -> Dict[str, Any]:
+    async def get_all_backup_assets(self) -> list[dict[str, Any]]:
         """
-        Pulls from Git and restores/syncs the local database from the exported files.
+        Pulls from Git and returns a list of all asset dictionaries found in the backup.
         """
-        results = {"success": 0, "failed": 0, "errors": []}
+        assets = []
         try:
             # 1. Sync from remote
             if not self._initialized_remote:
                 await self._initialize_remote_repo_api()
             
             if not os.path.exists(os.path.join(self.export_dir, ".git")):
-                raise Exception("Git repository not initialized in exports/ folder.")
+                logger.error("AutoBackup: Git repository not initialized.")
+                return []
 
             logger.info("AutoBackup: Pulling latest backup from GitHub...")
             pull_res = subprocess.run(["git", "pull", "origin", "main", "--rebase"], cwd=self.export_dir, capture_output=True, text=True)
             if pull_res.returncode != 0:
-                logger.warning(f"AutoBackup: Pull failed (might be first push): {pull_res.stderr}")
+                logger.warning(f"AutoBackup: Pull failed: {pull_res.stderr}")
 
             # 2. Iterate metadata JSONs
             meta_dir = os.path.join(self.export_dir, "metadata")
             if not os.path.exists(meta_dir):
-                logger.info("AutoBackup: No metadata directory found. Nothing to restore.")
-                return results
-
-            from storage.sqlite_api import sqlite_storage
+                return []
             
             for filename in os.listdir(meta_dir):
                 if not filename.endswith(".json"):
@@ -222,25 +220,42 @@ class AutoBackupManager:
                     lang = meta_data.get("language", "python")
                     ext = self._get_extension(lang)
                     
-                    # 3. Read source code
+                    # Read source code if available
                     code_path = os.path.join(self.export_dir, "functions", lang.lower(), f"{name}.{ext}")
                     if os.path.exists(code_path):
                         with open(code_path, "r", encoding="utf-8") as f:
                             meta_data["code"] = f.read()
                     
-                    # 4. Upsert to DB (this also updates vector store)
-                    logger.debug(f"AutoBackup: Restoring function '{name}'...")
-                    await sqlite_storage.upsert_function(meta_data)
-                    results["success"] += 1
-                    
+                    assets.append(meta_data)
                 except Exception as e:
-                    logger.error(f"AutoBackup: Failed to restore '{filename}': {e}")
-                    results["failed"] += 1
-                    results["errors"].append(f"{filename}: {e}")
+                    logger.error(f"AutoBackup: Failed to read '{filename}': {e}")
 
         except Exception as e:
-            logger.error(f"AutoBackup: Restoration process failed: {e}")
-            results["errors"].append(str(e))
+            logger.error(f"AutoBackup: Error listing backup assets: {e}")
+            
+        return assets
+
+    async def restore_from_git(self) -> dict[str, Any]:
+        """
+        High-level restoration: Gets assets from Git and upserts them using the orchestrator or local DB.
+        Note: The actual DB sync is now triggered elsewhere to avoid circularity.
+        """
+        # This keeps the method signature for compatibility but it's now a stub or uses local import carefully
+        results = {"success": 0, "failed": 0, "errors": []}
+        assets = await self.get_all_backup_assets()
+        
+        # We'll use a local import here, but only if absolutely necessary
+        try:
+            from storage.sqlite_api import sqlite_storage
+            for asset in assets:
+                try:
+                    await sqlite_storage.upsert_function(asset)
+                    results["success"] += 1
+                except Exception as e:
+                    results["failed"] += 1
+                    results["errors"].append(f"{asset.get('name')}: {e}")
+        except ImportError:
+            results["errors"].append("Could not import sqlite_storage for restoration.")
             
         return results
 
@@ -298,7 +313,73 @@ class AutoBackupManager:
         except Exception as e:
             logger.error(f"AutoBackup: Private Git sync failed for '{name}': {e}")
 
-    async def process_backup(self, data: Dict[str, Any]) -> None:
+    async def archive_asset(self, name: str) -> None:
+        """
+        Moves the asset files to an archives/ directory and syncs with Git.
+        """
+        try:
+            # 1. Sync from remote
+            if not self._initialized_remote:
+                await self._initialize_remote_repo_api()
+            
+            # 2. Identify files
+            found_files = []
+            # Check metadata
+            meta_path = os.path.join(self.export_dir, "metadata", f"{name}.json")
+            if os.path.exists(meta_path):
+                found_files.append(meta_path)
+                
+            # Check functions (all possible extensions)
+            for ext in ["py", "js", "ts", "md", "txt"]:
+                # We don't know the exact lang without meta, so we check all common ones
+                # Better: read meta first if it exists
+                pass
+            
+            # To be more efficient, we read the language from the meta before moving
+            lang = "unknown"
+            if os.path.exists(meta_path):
+                with open(meta_path, "r", encoding="utf-8") as f:
+                    try:
+                        meta = json.load(f)
+                        lang = meta.get("language", "unknown")
+                    except: pass
+            
+            ext = self._get_extension(lang)
+            code_path = os.path.join(self.export_dir, "functions", lang.lower(), f"{name}.{ext}")
+            if os.path.exists(code_path):
+                found_files.append(code_path)
+            
+            if not found_files:
+                logger.info(f"AutoBackup: No files found to archive for '{name}'.")
+                return
+
+            # 3. Move to archives directory
+            import datetime
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            archive_base = os.path.join(self.export_dir, "archives", timestamp, name)
+            os.makedirs(archive_base, exist_ok=True)
+            
+            for fpath in found_files:
+                target = os.path.join(archive_base, os.path.basename(fpath))
+                os.rename(fpath, target)
+                
+            # 4. Git sync
+            await (await asyncio.create_subprocess_exec("git", "add", ".", cwd=self.export_dir)).wait()
+            commit_proc = await asyncio.create_subprocess_exec(
+                "git", "commit", "-m", f"archive: {name}", 
+                cwd=self.export_dir,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            await commit_proc.communicate()
+            
+            await (await asyncio.create_subprocess_exec("git", "push", "origin", "main", cwd=self.export_dir)).wait()
+            logger.info(f"AutoBackup: Successfully archived '{name}' to Git.")
+
+        except Exception as e:
+            logger.error(f"AutoBackup: Archiving failed for '{name}': {e}")
+
+    async def process_backup(self, data: dict[str, Any]) -> None:
         """
         Full backup flow: Export then Sync.
         """

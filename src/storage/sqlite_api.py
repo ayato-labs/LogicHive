@@ -148,6 +148,21 @@ class SqliteStorage:
             logger.error(f"SQLite: Failed to list all functions: {e}")
             return []
 
+    async def delete_function(self, name: str) -> bool:
+        """
+        Deletes a function from the database by name.
+        """
+        try:
+            db = await get_db_connection()
+            await db.execute("DELETE FROM logichive_functions WHERE name = ?", (name,))
+            await db.commit()
+            await db.close()
+            logger.info(f"SQLite: Function '{name}' deleted.")
+            return True
+        except Exception as e:
+            logger.error(f"SQLite: Failed to delete function '{name}': {e}")
+            return False
+
     async def find_similar_functions(
         self,
         query_text: Optional[str] = None,

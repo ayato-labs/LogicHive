@@ -1,23 +1,22 @@
 import logging
 import ast
 import re
-from typing import Dict, List, Any, Optional
+import asyncio
+from typing import Any, Optional
+
 from storage.sqlite_api import sqlite_storage
 from core.consolidation import LogicIntelligence
-from core.config import GEMINI_API_KEY, QUALITY_GATE_THRESHOLD
+from core.config import GEMINI_API_KEY, QUALITY_GATE_THRESHOLD, ENABLE_AUTO_BACKUP
 from core.exceptions import ValidationError
 from core.hash_utils import calculate_code_hash
-
 from core.evaluation.manager import EvaluationManager
-from storage.auto_backup import backup_manager
-import asyncio
+from storage.vector_store import vector_manager
 
 logger = logging.getLogger(__name__)
 
 # --- Helpers ---
 
-
-def extract_dependencies(code: str, language: str = "python") -> List[str]:
+def extract_dependencies(code: str, language: str = "python") -> list[str]:
     """
     Extracts dependencies based on language.
     Python uses AST, while others use optimized regex.
@@ -71,36 +70,45 @@ def extract_dependencies(code: str, language: str = "python") -> List[str]:
 
     # Clean up standard libs/internal refs
     std_lib = {
-        "os",
-        "sys",
-        "json",
-        "math",
-        "datetime",
-        "typing",
-        "asyncio",
-        "logging",
-        "ast",
-        "pathlib",
-        "abc",
-        "fs",
-        "path",
-        "http",
-        "https",
-        "crypto",
+        "os", "sys", "json", "math", "datetime", "typing", "asyncio", "logging",
+        "ast", "pathlib", "abc", "fs", "path", "http", "https", "crypto"
     }
     return sorted(list(dependencies - std_lib))
 
 
-# --- MCP / REST API Implementation Wrappers ---
+async def do_delete_async(name: str) -> bool:
+    """
+    Orchestrates deletion from DB, Vector index, and archiving in Backup.
+    """
+    try:
+        # 1. Local DB deletion
+        db_success = await sqlite_storage.delete_function(name)
+        if not db_success:
+            return False
 
+        # 2. Vector index deletion (background)
+        asyncio.create_task(vector_manager.remove_vector(name))
+
+        # 3. Backup Archiving (background)
+        if ENABLE_AUTO_BACKUP:
+            from storage.auto_backup import backup_manager
+            asyncio.create_task(backup_manager.archive_asset(name))
+
+        return True
+    except Exception as e:
+        logger.error(f"Orchestrator: Deletion failed for '{name}': {e}")
+        return False
+
+
+# --- MCP / REST API Implementation Wrappers ---
 
 async def do_save_async(
     name: str,
     code: str,
     description: str = "",
-    tags: List[str] = [],
+    tags: list[str] = [],
     language: str = "python",
-    dependencies: List[str] = [],
+    dependencies: list[str] = [],
     test_code: str = "",
 ):
     """
@@ -169,13 +177,14 @@ async def do_save_async(
     save_result = await sqlite_storage.upsert_function(data)
     
     # 8. Trigger Background Auto-Backup (Fire-and-forget)
-    if save_result:
+    if save_result and ENABLE_AUTO_BACKUP:
+        from storage.auto_backup import backup_manager
         asyncio.create_task(backup_manager.process_backup(data))
         
     return save_result
 
 
-async def do_get_async(name: str) -> Optional[Dict[str, Any]]:
+async def do_get_async(name: str) -> Optional[dict[str, Any]]:
     """Asynchronous implementation for getting a function."""
     return await sqlite_storage.get_function_by_name(name)
 
@@ -198,6 +207,5 @@ async def do_search_async(query: str, limit: int = 5, language: Optional[str] = 
     reranked_results = await intel.rerank_results(query, initial_results, limit=limit)
     
     return reranked_results
-
 
 # --- End of Orchestrator ---
