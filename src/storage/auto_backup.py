@@ -183,6 +183,67 @@ class AutoBackupManager:
         except Exception as e:
             logger.error(f"AutoBackup: Bulk sync failed: {e}")
 
+    async def restore_from_git(self) -> Dict[str, Any]:
+        """
+        Pulls from Git and restores/syncs the local database from the exported files.
+        """
+        results = {"success": 0, "failed": 0, "errors": []}
+        try:
+            # 1. Sync from remote
+            if not self._initialized_remote:
+                await self._initialize_remote_repo_api()
+            
+            if not os.path.exists(os.path.join(self.export_dir, ".git")):
+                raise Exception("Git repository not initialized in exports/ folder.")
+
+            logger.info("AutoBackup: Pulling latest backup from GitHub...")
+            pull_res = subprocess.run(["git", "pull", "origin", "main", "--rebase"], cwd=self.export_dir, capture_output=True, text=True)
+            if pull_res.returncode != 0:
+                logger.warning(f"AutoBackup: Pull failed (might be first push): {pull_res.stderr}")
+
+            # 2. Iterate metadata JSONs
+            meta_dir = os.path.join(self.export_dir, "metadata")
+            if not os.path.exists(meta_dir):
+                logger.info("AutoBackup: No metadata directory found. Nothing to restore.")
+                return results
+
+            from storage.sqlite_api import sqlite_storage
+            
+            for filename in os.listdir(meta_dir):
+                if not filename.endswith(".json"):
+                    continue
+                
+                try:
+                    meta_path = os.path.join(meta_dir, filename)
+                    with open(meta_path, "r", encoding="utf-8") as f:
+                        meta_data = json.load(f)
+                    
+                    name = meta_data.get("name")
+                    lang = meta_data.get("language", "python")
+                    ext = self._get_extension(lang)
+                    
+                    # 3. Read source code
+                    code_path = os.path.join(self.export_dir, "functions", lang.lower(), f"{name}.{ext}")
+                    if os.path.exists(code_path):
+                        with open(code_path, "r", encoding="utf-8") as f:
+                            meta_data["code"] = f.read()
+                    
+                    # 4. Upsert to DB (this also updates vector store)
+                    logger.debug(f"AutoBackup: Restoring function '{name}'...")
+                    await sqlite_storage.upsert_function(meta_data)
+                    results["success"] += 1
+                    
+                except Exception as e:
+                    logger.error(f"AutoBackup: Failed to restore '{filename}': {e}")
+                    results["failed"] += 1
+                    results["errors"].append(f"{filename}: {e}")
+
+        except Exception as e:
+            logger.error(f"AutoBackup: Restoration process failed: {e}")
+            results["errors"].append(str(e))
+            
+        return results
+
     async def sync_to_git(self, name: str) -> None:
         """
         Runs git commands in the exports/ directory to sync with the private backup repo.
