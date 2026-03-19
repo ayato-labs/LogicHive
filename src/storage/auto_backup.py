@@ -103,6 +103,8 @@ class AutoBackupManager:
         except Exception as e:
             logger.error(f"AutoBackup: Unexpected error during initialization: {e}")
         return False
+
+    def _get_extension(self, language: str) -> str:
         mapping = {
             "python": "py",
             "javascript": "js",
