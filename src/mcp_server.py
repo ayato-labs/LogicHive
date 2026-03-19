@@ -7,7 +7,7 @@ mcp = FastMCP("LogicHive")
 
 
 @mcp.tool()
-async def search_functions(query: str, limit: int = 5) -> str:
+async def search_functions(query: str, limit: int = 5, language: str = None) -> str:
     """
     Search for high-quality, reusable code functions within the LogicHive vault using Hybrid Search.
     This is the primary tool for knowledge retrieval. Use it when you need to find existing 
@@ -17,6 +17,7 @@ async def search_functions(query: str, limit: int = 5) -> str:
     1. Semantic Search: Natural language queries (e.g., "authentication helper").
     2. Exact Match: Function names (e.g., "normalize_llm_args").
     3. Tag Filter: Use "#tagname" (e.g., "#security").
+    4. Language Filter: Specify the language (e.g., "python", "typescript") to restrict results.
 
     INTERPRETING RESULTS:
     - Results include a 'reliability_score' (0-100). Scores >= 80 are recommended for production.
@@ -25,8 +26,9 @@ async def search_functions(query: str, limit: int = 5) -> str:
     Args:
         query: Search term, exact name, or #tag.
         limit: Max results. Default 5. Use higher limits for broad semantic queries.
+        language: Optional language to filter by (e.g., 'python', 'javascript').
     """
-    results = await orchestrator.do_search_async(query, limit)
+    results = await orchestrator.do_search_async(query, limit, language)
     if not results:
         return "No matching functions found."
 
@@ -113,6 +115,31 @@ async def save_function(
         return f"LogicHive Error: {str(e)}"
     except Exception as e:
         return f"Unexpected Error: {str(e)}"
+
+
+@mcp.tool()
+async def debug_db() -> str:
+    """
+    Debug tool to inspect LogicHive database configuration and table structure.
+    """
+    from core.config import SQLITE_DB_PATH
+    import os
+    import sqlite3
+    
+    status = [f"SQLITE_DB_PATH: {SQLITE_DB_PATH}"]
+    status.append(f"Exists: {os.path.exists(SQLITE_DB_PATH)}")
+    
+    if os.path.exists(SQLITE_DB_PATH):
+        try:
+            status.append(f"Size: {os.path.getsize(SQLITE_DB_PATH)} bytes")
+            conn = sqlite3.connect(SQLITE_DB_PATH)
+            tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+            status.append(f"Tables: {tables}")
+            conn.close()
+        except Exception as e:
+            status.append(f"Error reading DB: {e}")
+            
+    return "\n".join(status)
 
 
 if __name__ == "__main__":

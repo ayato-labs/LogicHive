@@ -40,8 +40,7 @@ if IS_CLOUD:
     DATA_DIR = Path("/tmp/logic-hive")
 else:
     # Local dev fallback: Consolidate to storage/data at root
-    DEFAULT_DATA_DIR = (BASE_DIR / "storage" / "data").resolve().absolute()
-    DATA_DIR = Path(os.getenv("DATA_DIR", str(DEFAULT_DATA_DIR))).resolve().absolute()
+    DATA_DIR = Path("c:/Users/saiha/My_Service/programing/MCP/LogicHive/storage/data")
 
 # Ensure transient directory exists
 try:

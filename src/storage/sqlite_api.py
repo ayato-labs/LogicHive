@@ -6,6 +6,7 @@ import asyncio
 from functools import wraps
 from typing import List, Dict, Any, Optional
 from core.db import get_db_connection, retry_on_db_lock
+from core.config import VECTOR_DIMENSION
 from core.exceptions import StorageError
 
 from storage.vector_store import vector_manager
@@ -137,16 +138,18 @@ class SqliteStorage:
         embedding: List[float],
         query_text: Optional[str] = None,
         tags: Optional[List[str]] = None,
+        language: Optional[str] = None,
         limit: int = 5,
         match_threshold: float = 0.1,
     ) -> List[Dict[str, Any]]:
         """
-        Enhanced Hybrid Search: Combines Vector Similarity (FAISS) with SQL-based Keyword/Tag matching.
+        Enhanced Hybrid Search: Combines Vector Similarity (FAISS) with SQL-based Keyword/Tag/Language matching.
 
         Args:
             embedding: Vector embedding for semantic search.
             query_text: Optional text for keyword/name/description matching.
             tags: Optional list of tags for strict filtering.
+            language: Optional language for strict filtering (e.g., "python").
             limit: Maximum results to return.
             match_threshold: Minimum similarity score for vector results.
         """
@@ -163,11 +166,18 @@ class SqliteStorage:
                 await vector_manager.ensure_initialized(rows)
 
             # 2. Perform vector search (Core semantic results)
-            vector_matches = await vector_manager.search(embedding, limit=limit * 3)
+            vector_matches = []
+            if embedding and len(embedding) == VECTOR_DIMENSION:
+                try:
+                    vector_matches = await vector_manager.search(embedding, limit=limit * 5)
+                except Exception as ve:
+                    logger.warning(f"SQLite: Vector search failed, falling back to pure SQL: {ve}")
+            else:
+                logger.info("SQLite: Empty or invalid embedding, performing pure SQL/Tag search.")
 
-            # 3. Perform SQL Keyword/Tag Search (High-precision results)
+            # 3. Perform SQL Keyword/Tag/Language Search (High-precision results)
             sql_results = {}
-            if query_text or tags:
+            if query_text or tags or language:
                 db = await get_db_connection()
                 db.row_factory = aiosqlite.Row
 
@@ -197,9 +207,15 @@ class SqliteStorage:
                         )
                         params.append(tag)
 
+                # Language Strict Match
+                if language:
+                    conditions.append("LOWER(language) = LOWER(?)")
+                    params.append(language)
+
                 if conditions:
                     where_clause = " AND ".join(conditions)
-                    sql = f"SELECT * FROM logichive_functions WHERE {where_clause} LIMIT {limit * 2}"
+                    sql = f"SELECT * FROM logichive_functions WHERE {where_clause} LIMIT {limit * 3}"
+                    logger.debug(f"SQLite: SQL Search: {sql} with {params}")
                     async with db.execute(sql, params) as cursor:
                         sql_rows = await cursor.fetchall()
 
@@ -229,8 +245,7 @@ class SqliteStorage:
 
             for name, similarity in vector_matches:
                 if name in final_results:
-                    # If already in SQL results, combine scores (max or weighted)
-                    # For personal vault, we'll take max to ensure direct matches stay high
+                    # If already in SQL results, combine scores
                     final_results[name]["similarity"] = max(
                         final_results[name]["similarity"], similarity
                     )
@@ -240,10 +255,15 @@ class SqliteStorage:
 
             if names_to_hydrate:
                 placeholders = ", ".join(["?"] * len(names_to_hydrate))
-                sql = (
-                    f"SELECT * FROM logichive_functions WHERE name IN ({placeholders})"
-                )
-                async with db.execute(sql, names_to_hydrate) as cursor:
+                # Apply language filter even to hydrated results if specified
+                lang_clause = "AND LOWER(language) = LOWER(?)" if language else ""
+                sql = f"SELECT * FROM logichive_functions WHERE name IN ({placeholders}) {lang_clause}"
+                
+                query_params = names_to_hydrate.copy()
+                if language:
+                    query_params.append(language)
+
+                async with db.execute(sql, query_params) as cursor:
                     db_rows = await cursor.fetchall()
                     for db_row in db_rows:
                         res = self._process_row(dict(db_row))
@@ -260,8 +280,10 @@ class SqliteStorage:
             return sorted_results[:limit]
 
         except Exception as e:
-            logger.error(f"SQLite: Hybrid search failed: {e}")
-            raise StorageError(f"Hybrid search failed: {e}")
+            logger.error(f"SQLite: Hybrid search failed", exc_info=True)
+            # Return detailed error if possible
+            error_msg = f"{type(e).__name__}: {str(e)}"
+            raise StorageError(f"Hybrid search failed: {error_msg}")
 
     def _process_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
         """Helper to parse JSON fields from a database row."""

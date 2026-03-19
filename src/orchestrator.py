@@ -173,15 +173,15 @@ async def do_get_async(name: str) -> Optional[Dict[str, Any]]:
     return await sqlite_storage.get_function_by_name(name)
 
 
-async def do_search_async(query: str, limit: int = 5):
-    """Asynchronous implementation for searching functions with Query Expansion."""
+async def do_search_async(query: str, limit: int = 5, language: Optional[str] = None):
+    """Asynchronous implementation for searching functions with Query Expansion and Filtering."""
     intel = LogicIntelligence(GEMINI_API_KEY)
 
     query_emb = await intel.generate_embedding(query)
 
-    logger.info(f"Orchestrator: Performing hybrid search for '{query}'")
+    logger.info(f"Orchestrator: Performing hybrid search for '{query}' (Lang: {language})")
     return await sqlite_storage.find_similar_functions(
-        query_emb, query_text=query, limit=limit
+        query_emb, query_text=query, limit=limit, language=language
     )
 
 
