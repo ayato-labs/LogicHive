@@ -32,7 +32,14 @@ def global_mock_ai():
 
         # Create a universal mock for EvaluationManager
         mock_eval_inst = MagicMock()
-        mock_eval_inst.evaluate_all = AsyncMock(return_value={"score": 85.0, "reason": "Mocked validation pass", "details": {}})
+        # Smarter mock for EvaluationManager to support quality gate rejections in tests
+        async def mock_evaluate_all(code, **kwargs):
+            if "(" in code and ")" not in code:
+                from core.exceptions import ValidationError
+                raise ValidationError("Mocked syntax error rejection")
+            return {"score": 85.0, "reason": "Mocked validation pass", "details": {}}
+        
+        mock_eval_inst.evaluate_all = AsyncMock(side_effect=mock_evaluate_all)
 
         # Patch multiple potential import paths
         patches = [

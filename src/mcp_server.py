@@ -58,9 +58,11 @@ async def get_function(name: str) -> str:
     if not f_data:
         return f"Function '{name}' not found"
 
-    lang = f_data.get("language", "python")
-    code = f_data["code"]
-    return f"```{lang}\n{code}\n```"
+    desc = f_data.get("description", "No description")
+    tags = ", ".join(f_data.get("tags", []))
+    deps = ", ".join(f_data.get("dependencies", []))
+    
+    return f"**Function: {name}**\n\n{desc}\n\n**Tags:** {tags}\n**Dependencies:** {deps}\n\n```{lang}\n{code}\n```"
 
 
 @mcp.tool()
