@@ -1,3 +1,4 @@
+![CI Status](https://github.com/Ayato-AI-for-Auto/LogicHive/actions/workflows/cd.yml/badge.svg)
 # 🛡️ LogicHive: Private AI Logic Hub
 
 LogicHiveは、エンジニアが「一度書いた最高の実装」を資産として蓄積し、AIエージェント（Antigravity, Cursor, Gemini等）を通じて瞬時に呼び出し・再利用するためのプライベート・ロジック・ハブです。
