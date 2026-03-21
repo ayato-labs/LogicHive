@@ -4,9 +4,10 @@ from core.consolidation import LogicIntelligence
 from core.config import GEMINI_API_KEY
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(not os.environ.get("GEMINI_API_KEY"), reason="Real Gemini API Key not set")
 async def test_evaluate_quality_real_gemini():
     """Verifies that the strict quality gate identifies broken code using real Gemini API."""
-    intel = LogicIntelligence(GEMINI_API_KEY)
+    intel = LogicIntelligence(os.environ.get("GEMINI_API_KEY"))
     
     # 1. Broken code (Missing colon and pass)
     broken_code = "def broken_func()"

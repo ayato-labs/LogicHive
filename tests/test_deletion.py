@@ -7,8 +7,11 @@ sys.path.append(os.path.abspath('src'))
 
 import orchestrator
 from storage.sqlite_api import sqlite_storage
+import pytest
 
-async def test_deletion():
+@pytest.mark.asyncio
+@pytest.mark.skipif(not os.environ.get("GEMINI_API_KEY"), reason="Real Gemini API Key not set")
+async def test_deletion_integration():
     from core.config import ENABLE_AUTO_BACKUP
     print(f"=== LogicHive: Deletion & Archiving Test (AutoBackup: {ENABLE_AUTO_BACKUP}) ===")
     
@@ -62,5 +65,3 @@ async def test_deletion():
     else:
         print(f"❌ Error: Archives directory NOT found.")
 
-if __name__ == "__main__":
-    asyncio.run(test_deletion())

@@ -1,8 +1,10 @@
+import os
 import pytest
 from orchestrator import do_save_async, do_search_async
 from storage.sqlite_api import sqlite_storage
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(not os.environ.get("GEMINI_API_KEY"), reason="Real Gemini API Key not set")
 async def test_full_save_and_search_integration():
     """Tests the full flow from orchestrator to storage using real Gemini API."""
     name = "integration_test_func"

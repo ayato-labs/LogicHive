@@ -1,6 +1,6 @@
 import pytest
 import asyncio
-from core.evaluation.static_analysis import RuffEvaluator
+from core.evaluation.plugins.static import RuffEvaluator
 
 @pytest.mark.asyncio
 async def test_ruff_evaluator_clean_code():
