@@ -14,6 +14,9 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   test:
     name: Test (Python ${{ matrix.python-version }} on ${{ matrix.os }})
@@ -35,7 +38,7 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv pip install -e ".[test]" || uv pip install -e .
+        run: uv pip install --system -e ".[test]" || uv pip install --system -e .
 
       - name: Run tests
         id: pytest
@@ -142,6 +145,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set FORCE_JAVASCRIPT_ACTIONS_TO_NODE24
+        run: echo "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true" >> $GITHUB_ENV
+
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
@@ -152,8 +158,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv pip install .
-          uv pip install pyinstaller
+          uv pip install --system .
+          uv pip install --system pyinstaller
 
       - name: Build EXE
         run: |
