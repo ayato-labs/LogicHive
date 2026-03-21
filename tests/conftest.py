@@ -15,25 +15,57 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 from storage.init_db import init_db
 from storage.sqlite_api import vector_manager
 
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import MagicMock, AsyncMock, patch
+
+@pytest.fixture(scope="session", autouse=True)
+def global_mock_ai():
+    """Globally mocks AI components if GEMINI_API_KEY is missing, ensuring CI passes."""
+    if not os.environ.get("GEMINI_API_KEY"):
+        # Create a universal mock for LogicIntelligence
+        mock_intel_inst = MagicMock()
+        mock_intel_inst.generate_embedding = AsyncMock(return_value=[0.1] * 768)
+        mock_intel_inst.evaluate_quality = AsyncMock(return_value={"score": 85, "reason": "Mocked pass"})
+        mock_intel_inst.expand_query = AsyncMock(side_effect=lambda x: x)
+        mock_intel_inst.rerank_results = AsyncMock(side_effect=lambda q, res, limit: res[:limit])
+        mock_intel_inst.optimize_metadata = MagicMock(return_value={"description": "Mocked technical desc", "tags": ["mock"]})
+        mock_intel_inst.construct_search_document = MagicMock(return_value="search doc")
+
+        # Create a universal mock for EvaluationManager
+        mock_eval_inst = MagicMock()
+        mock_eval_inst.evaluate_all = AsyncMock(return_value={"score": 85.0, "reason": "Mocked validation pass", "details": {}})
+
+        # Patch multiple potential import paths
+        patches = [
+            patch("orchestrator.LogicIntelligence", return_value=mock_intel_inst),
+            patch("orchestrator.EvaluationManager", return_value=mock_eval_inst),
+            patch("core.consolidation.LogicIntelligence", return_value=mock_intel_inst),
+            patch("api.server.EvaluationManager", return_value=mock_eval_inst),
+        ]
+        
+        for p in patches:
+            p.start()
+        
+        yield
+        
+        for p in patches:
+            p.stop()
+    else:
+        yield
 
 @pytest.fixture
 def mock_intel():
-    """Provides a mocked LogicIntelligence engine."""
+    """Provides a mocked LogicIntelligence engine for specific test overrides."""
     mock = MagicMock()
     
     async def side_effect_eval(code):
-        # Allow tests to trigger failure by using 'broken' or 'bad' in name or providing broken brackets
-        # (Though orchestrator now catches brackets, this is a fallback)
-        if "bad" in code.lower() or "broken" in code.lower() or "(" in code and ")" not in code:
+        if "bad" in code.lower() or "broken" in code.lower() or ("(" in code and ")" not in code):
             return {"score": 0, "reason": "Mocked rejection for poor quality."}
         return {"score": 85, "reason": "Mocked technical specification pass."}
         
-    # Mock async methods
     mock.generate_embedding = AsyncMock(return_value=[0.1] * 768)
     mock.evaluate_quality = AsyncMock(side_effect=side_effect_eval)
     mock.expand_query = AsyncMock(side_effect=lambda x: x)
-    # Mock other methods
+    mock.rerank_results = AsyncMock(side_effect=lambda q, res, limit: res[:limit])
     mock.optimize_metadata = MagicMock(return_value={"description": "Mocked technical desc", "tags": ["mock"]})
     mock.construct_search_document = MagicMock(return_value="search doc")
     return mock
