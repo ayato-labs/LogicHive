@@ -199,7 +199,8 @@ async def do_search_async(query: str, limit: int = 5, language: Optional[str] = 
     """Asynchronous implementation for searching functions with Query Expansion and Re-ranking."""
     intel = LogicIntelligence(GEMINI_API_KEY)
 
-    query_emb = await intel.generate_embedding(query)
+    expanded_query = await intel.expand_query(query)
+    query_emb = await intel.generate_embedding(expanded_query)
 
     logger.info(f"Orchestrator: Performing hybrid search for '{query}' (Lang: {language})")
     
