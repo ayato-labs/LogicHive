@@ -8,7 +8,9 @@ mcp = FastMCP("LogicHive")
 
 
 @mcp.tool()
-async def search_functions(query: str, limit: int = 5, language: str = None) -> str:
+async def search_functions(
+    query: str, limit: int = 5, language: str = None
+) -> str:
     """
     Search for high-quality, reusable code functions within the LogicHive vault using Hybrid Search.
     This is the primary tool for knowledge retrieval. Use it when you need to find existing 
@@ -18,31 +20,28 @@ async def search_functions(query: str, limit: int = 5, language: str = None) -> 
     1. Semantic Search: Natural language queries (e.g., "authentication helper").
     2. Exact Match: Function names (e.g., "normalize_llm_args").
     3. Tag Filter: Use "#tagname" (e.g., "#security").
-    4. Language Filter: Specify the language (e.g., "python", "typescript") to restrict results.
-
-    INTERPRETING RESULTS:
-    - Results include a 'reliability_score' (0-100). Scores >= 80 are recommended for production.
-    - 'similarity' (0.0-1.0) indicates how well it matches your semantic query.
+    4. Language Filter: Specify the language (e.g., "python", "javascript") to restrict results.
 
     Args:
         query: Search term, exact name, or #tag.
-        limit: Max results. Default 5. Use higher limits for broad semantic queries.
+        limit: Max results. Default 5.
         language: Optional language to filter by (e.g., 'python', 'javascript').
     """
     results = await orchestrator.do_search_async(query, limit, language)
     if not results:
         return "No matching functions found."
 
-    formatted = f"### Search Results for: {query}\n\n"
-    for r in results:
-        lang_str = f" [{r.get('language', 'unknown')}]"
-        # Use similarity if available (from semantic search)
-        reliability = r.get("reliability_score", "N/A")
-        if "similarity" in r:
-            reliability = f"{reliability} | Similarity: {r['similarity']:.2f}"
-
-        formatted += f"- **{r['name']}**{lang_str} (Reliability: {reliability})\n  {r.get('description', 'No description')}\n\n"
-    return formatted
+    md = "### Search Results\n\n"
+    for res in results:
+        name = res["name"]
+        sim = res.get("similarity", 0)
+        rel = res.get("reliability_score", 0) * 100
+        desc = res.get("description", "No description")
+        tags = ", ".join(res.get("tags", []))
+        md += f"- **{name}** (Match: {sim:.2f}, Reliability: {rel:.1f}%)\n"
+        md += f"  - *{desc}*\n"
+        md += f"  - Tags: {tags}\n"
+    return md
 
 
 @mcp.tool()
@@ -58,6 +57,8 @@ async def get_function(name: str) -> str:
     if not f_data:
         return f"Function '{name}' not found"
 
+    lang = f_data.get("language", "python")
+    code = f_data["code"]
     desc = f_data.get("description", "No description")
     tags = ", ".join(f_data.get("tags", []))
     deps = ", ".join(f_data.get("dependencies", []))

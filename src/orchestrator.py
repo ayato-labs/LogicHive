@@ -146,6 +146,12 @@ async def do_save_async(
 
     # 3. LLM Metadata Enrichment / Embedding prep
     intel = LogicIntelligence(GEMINI_API_KEY)
+    
+    # Enrich description and tags if needed
+    if not description or not tags:
+        enriched = intel.optimize_metadata(name, code, description, tags)
+        description = enriched.get("description", description)
+        tags = enriched.get("tags", tags)
 
     # 6. Generate Embedding for RAG
     search_doc = intel.construct_search_document(name, description, tags, code)
