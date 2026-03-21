@@ -24,6 +24,7 @@ dependencies = [
     "stripe",
     "streamlit",
     "pandas",
+    "pyinstaller",
 ]
 
 [tool.setuptools.packages.find]
