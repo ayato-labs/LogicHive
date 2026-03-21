@@ -37,7 +37,7 @@ def global_mock_ai():
         # Smarter mock for EvaluationManager to support quality gate rejections in tests
         async def mock_evaluate_all(code, language, **kwargs):
             # Instant rejection for obvious syntax errors (unbalanced brackets/tags)
-            if ("(" in code and ")" not in code) or ("{" in code and "}" not in code) or ("<" in code and ">" not in code):
+            if code.count("(") != code.count(")") or code.count("{") != code.count("}") or code.count("<") != code.count(">"):
                 from core.exceptions import ValidationError
                 raise ValidationError(f"Mocked syntax error rejection ({language})")
             return {"score": 85.0, "reason": "Mocked validation pass", "details": {}}

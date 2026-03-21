@@ -45,6 +45,7 @@ async def test_duplicate_save_skips_ai(test_db, mock_intel):
 async def test_semantic_search_integration(test_db, mock_intel):
     """Verifies that semantic search returns results via the mocked embedding path."""
     mock_intel.generate_embedding.reset_mock()
+    mock_intel.expand_query.reset_mock()
     
     await orchestrator.do_save_async("logic_a", "def a(): pass")
     # 1 call for save
