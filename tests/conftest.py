@@ -17,36 +17,38 @@ from storage.sqlite_api import vector_manager
 
 from unittest.mock import MagicMock, AsyncMock, patch
 
+# Global mock instances for session-wide access
+_SESSION_MOCK_INTEL = MagicMock()
+_SESSION_MOCK_EVAL = MagicMock()
+
 @pytest.fixture(scope="session", autouse=True)
 def global_mock_ai():
     """Globally mocks AI components if GEMINI_API_KEY is missing, ensuring CI passes."""
     if not os.environ.get("GEMINI_API_KEY"):
-        # Create a universal mock for LogicIntelligence
-        mock_intel_inst = MagicMock()
-        mock_intel_inst.generate_embedding = AsyncMock(return_value=[0.1] * 768)
-        mock_intel_inst.evaluate_quality = AsyncMock(return_value={"score": 85, "reason": "Mocked pass"})
-        mock_intel_inst.expand_query = AsyncMock(side_effect=lambda x: x)
-        mock_intel_inst.rerank_results = AsyncMock(side_effect=lambda q, res, limit: res[:limit])
-        mock_intel_inst.optimize_metadata = MagicMock(return_value={"description": "Mocked technical desc", "tags": ["mock"]})
-        mock_intel_inst.construct_search_document = MagicMock(return_value="search doc")
+        # Configure universal mock for LogicIntelligence
+        _SESSION_MOCK_INTEL.generate_embedding = AsyncMock(return_value=[0.1] * 768)
+        _SESSION_MOCK_INTEL.evaluate_quality = AsyncMock(return_value={"score": 85, "reason": "Mocked pass"})
+        _SESSION_MOCK_INTEL.expand_query = AsyncMock(side_effect=lambda x: x)
+        _SESSION_MOCK_INTEL.rerank_results = AsyncMock(side_effect=lambda q, res, limit: res[:limit])
+        _SESSION_MOCK_INTEL.optimize_metadata = MagicMock(return_value={"description": "Mocked technical desc", "tags": ["mock"]})
+        _SESSION_MOCK_INTEL.construct_search_document = MagicMock(return_value="search doc")
 
-        # Create a universal mock for EvaluationManager
-        mock_eval_inst = MagicMock()
+        # Configure universal mock for EvaluationManager
         # Smarter mock for EvaluationManager to support quality gate rejections in tests
         async def mock_evaluate_all(code, language, **kwargs):
-            if "(" in code and ")" not in code:
+            if ("(" in code and ")" not in code) or ("{" in code and "}" not in code):
                 from core.exceptions import ValidationError
-                raise ValidationError("Mocked syntax error rejection")
+                raise ValidationError(f"Mocked syntax error rejection ({language})")
             return {"score": 85.0, "reason": "Mocked validation pass", "details": {}}
         
-        mock_eval_inst.evaluate_all = AsyncMock(side_effect=mock_evaluate_all)
+        _SESSION_MOCK_EVAL.evaluate_all = AsyncMock(side_effect=mock_evaluate_all)
 
-        # Patch multiple potential import paths
+        # Patch multiple potential import paths using SAME instances
         patches = [
-            patch("orchestrator.LogicIntelligence", return_value=mock_intel_inst),
-            patch("orchestrator.EvaluationManager", return_value=mock_eval_inst),
-            patch("core.consolidation.LogicIntelligence", return_value=mock_intel_inst),
-            patch("core.evaluation.manager.EvaluationManager", return_value=mock_eval_inst),
+            patch("orchestrator.LogicIntelligence", return_value=_SESSION_MOCK_INTEL),
+            patch("orchestrator.EvaluationManager", return_value=_SESSION_MOCK_EVAL),
+            patch("core.consolidation.LogicIntelligence", return_value=_SESSION_MOCK_INTEL),
+            patch("core.evaluation.manager.EvaluationManager", return_value=_SESSION_MOCK_EVAL),
         ]
         
         for p in patches:
@@ -61,21 +63,8 @@ def global_mock_ai():
 
 @pytest.fixture
 def mock_intel():
-    """Provides a mocked LogicIntelligence engine for specific test overrides."""
-    mock = MagicMock()
-    
-    async def side_effect_eval(code):
-        if "bad" in code.lower() or "broken" in code.lower() or ("(" in code and ")" not in code):
-            return {"score": 0, "reason": "Mocked rejection for poor quality."}
-        return {"score": 85, "reason": "Mocked technical specification pass."}
-        
-    mock.generate_embedding = AsyncMock(return_value=[0.1] * 768)
-    mock.evaluate_quality = AsyncMock(side_effect=side_effect_eval)
-    mock.expand_query = AsyncMock(side_effect=lambda x: x)
-    mock.rerank_results = AsyncMock(side_effect=lambda q, res, limit: res[:limit])
-    mock.optimize_metadata = MagicMock(return_value={"description": "Mocked technical desc", "tags": ["mock"]})
-    mock.construct_search_document = MagicMock(return_value="search doc")
-    return mock
+    """Provides the SAME session-scoped mock instance for call tracking in tests."""
+    return _SESSION_MOCK_INTEL
 
 @pytest.fixture
 async def test_db():
