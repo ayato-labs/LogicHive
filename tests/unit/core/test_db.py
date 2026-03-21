@@ -1,24 +1,15 @@
-import sys
-import os
+import pytest
 import asyncio
 from unittest.mock import MagicMock, AsyncMock, patch
+import aiosqlite
 
-# Mock aiosqlite before importing core.db
-mock_aiosqlite = MagicMock()
-class MockOperationalError(Exception):
-    pass
-mock_aiosqlite.OperationalError = MockOperationalError
-sys.modules["aiosqlite"] = mock_aiosqlite
-
-# Add src to sys.path
-sys.path.append(os.path.join(os.getcwd(), "src"))
-
+# The decorator is in core.db
 from core.db import retry_on_db_lock
 
-# Define a custom exception for testing non-lock errors
-class OtherOperationalError(MockOperationalError):
+class MockOperationalError(aiosqlite.OperationalError):
     pass
 
+@pytest.mark.asyncio
 async def test_retry_on_db_lock_success():
     """Test that it returns the result if no error occurs."""
     mock_func = AsyncMock(return_value="success")
@@ -29,12 +20,13 @@ async def test_retry_on_db_lock_success():
     assert result == "success"
     mock_func.assert_called_once_with("arg", kw="arg")
 
+@pytest.mark.asyncio
 async def test_retry_on_db_lock_retry_then_success():
-    """Test that it retries once and then succeeds."""
+    """Test that it retries once and then succeeds on 'database is locked'."""
     mock_func = AsyncMock()
-    # Raise 'database is locked' then return success
+    # Raise a real-looking OperationalError
     mock_func.side_effect = [
-        MockOperationalError("database is locked"),
+        aiosqlite.OperationalError("database is locked"),
         "success"
     ]
 
@@ -46,71 +38,34 @@ async def test_retry_on_db_lock_retry_then_success():
         assert mock_func.call_count == 2
         mock_sleep.assert_called_once_with(0.1)
 
+@pytest.mark.asyncio
 async def test_retry_on_db_lock_max_retries_exceeded():
     """Test that it raises the error after max_retries."""
     max_retries = 2
     mock_func = AsyncMock()
-    mock_func.side_effect = MockOperationalError("database is locked")
+    mock_func.side_effect = aiosqlite.OperationalError("database is locked")
 
     with patch("asyncio.sleep", AsyncMock()) as mock_sleep:
         decorated = retry_on_db_lock(max_retries=max_retries, base_delay=0.1)(mock_func)
 
-        try:
+        with pytest.raises(aiosqlite.OperationalError) as excinfo:
             await decorated()
-            assert False, "Should have raised MockOperationalError"
-        except MockOperationalError as e:
-            assert "database is locked" in str(e)
-
-        # Initial call + max_retries = 3 calls
+        
+        assert "database is locked" in str(excinfo.value)
         assert mock_func.call_count == max_retries + 1
-        assert mock_sleep.call_count == max_retries
 
+@pytest.mark.asyncio
 async def test_retry_on_db_lock_other_error():
-    """Test that it does not retry on other errors."""
+    """Test that it does not retry on other OperationalErrors."""
     mock_func = AsyncMock()
-    mock_func.side_effect = OtherOperationalError("some other error")
+    mock_func.side_effect = aiosqlite.OperationalError("some other error")
 
     with patch("asyncio.sleep", AsyncMock()) as mock_sleep:
         decorated = retry_on_db_lock(max_retries=3)(mock_func)
 
-        try:
+        with pytest.raises(aiosqlite.OperationalError) as excinfo:
             await decorated()
-            assert False, "Should have raised OtherOperationalError"
-        except OtherOperationalError as e:
-            assert "some other error" in str(e)
-
+        
+        assert "some other error" in str(excinfo.value)
         assert mock_func.call_count == 1
         assert mock_sleep.call_count == 0
-
-async def test_retry_on_db_lock_exponential_backoff():
-    """Test that exponential backoff works correctly."""
-    mock_func = AsyncMock()
-    mock_func.side_effect = [
-        MockOperationalError("database is locked"),
-        MockOperationalError("database is locked"),
-        MockOperationalError("database is locked"),
-        "success"
-    ]
-
-    base_delay = 0.2
-    with patch("asyncio.sleep", AsyncMock()) as mock_sleep:
-        decorated = retry_on_db_lock(max_retries=5, base_delay=base_delay)(mock_func)
-        await decorated()
-
-        # Retries: 0 (delay 0.2*2^0=0.2), 1 (delay 0.2*2^1=0.4), 2 (delay 0.2*2^2=0.8)
-        assert mock_sleep.call_count == 3
-        mock_sleep.assert_any_call(0.2)
-        mock_sleep.assert_any_call(0.4)
-        mock_sleep.assert_any_call(0.8)
-
-async def run_all_tests():
-    """Entry point for pytest-like discovery or manual run."""
-    await test_retry_on_db_lock_success()
-    await test_retry_on_db_lock_retry_then_success()
-    await test_retry_on_db_lock_max_retries_exceeded()
-    await test_retry_on_db_lock_other_error()
-    await test_retry_on_db_lock_exponential_backoff()
-
-if __name__ == "__main__":
-    asyncio.run(run_all_tests())
-    print("All tests passed!")

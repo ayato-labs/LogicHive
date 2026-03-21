@@ -1,4 +1,5 @@
 from fastmcp import FastMCP
+import orchestrator
 from orchestrator import do_save_async, do_delete_async, do_get_async, do_search_async
 from core.exceptions import LogicHiveError, ValidationError
 

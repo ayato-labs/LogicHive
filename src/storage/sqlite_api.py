@@ -165,6 +165,7 @@ class SqliteStorage:
 
     async def find_similar_functions(
         self,
+        embedding: Optional[List[float]] = None,
         query_text: Optional[str] = None,
         tags: Optional[List[str]] = None,
         language: Optional[str] = None,
