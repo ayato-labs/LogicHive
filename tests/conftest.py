@@ -39,7 +39,7 @@ def global_mock_ai():
             patch("orchestrator.LogicIntelligence", return_value=mock_intel_inst),
             patch("orchestrator.EvaluationManager", return_value=mock_eval_inst),
             patch("core.consolidation.LogicIntelligence", return_value=mock_intel_inst),
-            patch("api.server.EvaluationManager", return_value=mock_eval_inst),
+            patch("core.evaluation.manager.EvaluationManager", return_value=mock_eval_inst),
         ]
         
         for p in patches:
