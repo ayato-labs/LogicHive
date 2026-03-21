@@ -43,7 +43,7 @@ jobs:
       - name: Run tests
         id: pytest
         run: |
-          uv run pytest tests/ > test_output.txt 2>&1 && echo "Pass" > status.txt || echo "Fail" > status.txt
+          uv run pytest tests/ > test_output.txt 2>&1 && python -c "print('Pass')" > status.txt || python -c "print('Fail')" > status.txt
         continue-on-error: true
 
       - name: Upload Result
