@@ -4,12 +4,12 @@
 LogicHiveは、エンジニアが「一度書いた最高の実装」を資産として蓄積し、AIエージェント（Antigravity, Cursor, Gemini等）を通じて瞬時に呼び出し・再利用するためのプライベート・ロジック・ハブです。
 
 ## 🌟 主な特徴
-- **プライベート運用**: SQLite (WALモード) と FAISS を使用した高速・セキュアなローカル環境。
-- **堅牢な自動バックアップ**: GitHubのプライベートリポジトリと自動同期。万が一のPC故障時も `restore_backup.py` で一瞬で復元。
-- **セーフ削除（アーカイブ）**: `delete_function` で削除したロジックは、GitHub上の `archives/` へ自動退避。資産を失うことはありません。
-- **高精度AI再ランキング**: ベクトル検索に加え、Gemini LLMがクエリとの関連性を再評価（Re-ranking）することで、最適なロジックを確実に提案。
-- **インテリジェント・品質ゲート**: Gemini APIによる解析と静的解析ツールを組み合わせた多角的な評価（Score 0-100）。
-- **エージェント協調**: MCP（Model Context Protocol）を通じて、AIエージェントとシームレスにロジックを統合。
+- **プライベート運用 (デフォルト)**: SQLite (WALモード) と FAISS を使用。GitHub連携不要で即座に動作。
+- **柔軟な自動同期 (オプショナル)**: 必要に応じてGitHubのプライベートリポジトリと同期可能。多人数・複数デバイスでの「知財共有」を実現。
+- **セーフ削除（アーカイブ）**: `delete_function` で削除したロジックは、GitHub同期有効時は `archives/` へ自動退避。
+- **高精度AI再ランキング**: Gemini LLMによる関連性の再評価（Re-ranking）で、最適なロジックを提案。
+- **インテリジェント・品質ゲート**: Gemini APIによる解析と静的解析ツールを組み合わせた自動審査（Score 0-100）。
+- **マルチエージェント協調**: Antigravity, Cursor, Gemini CLI 等の主要エージェントとMCP経由でシームレスに統合。
 
 ---
 
@@ -23,14 +23,15 @@ uv pip install -e .
 ```
 
 ### 2. 環境設定 (.env)
-`.env.example` を `.env` にコピーし、`GEMINI_API_KEY` と `GITHUB_TOKEN` を設定してください。
-- `GEMINI_API_KEY`: 品質評価とRAG（ベクトル生成）に使用します。
-- `GITHUB_TOKEN`: プライベートリポジトリへの自動バックアップに使用します。
+`.env.example` を `.env` にコピーし、必要な項目を設定してください。
+
+- **必須**: `GEMINI_API_KEY` (品質評価とRAGに使用)
+- **任意 (同期機能)**: `ENABLE_AUTO_BACKUP=true` に設定し、`GITHUB_TOKEN` を入力することでGitHub同期が有効になります。
 
 ### 3. MCPの登録（自動設定）
 プロジェクト内の `scripts/register_mcp.bat` を実行してください。以下の設定が試行されます。
 
-- **`mcp_config.json` の自動編集**: 各OSの標準的なMCP構成パスを検出し、`logic-hive` サーバーを登録します。
+- **対応エージェント**: Gemini CLI, Antigravity, Cursor, Cloud Code, VS Code (Generic)
 - **指示の自動注入**: `~/.gemini/GEMINI.md` 等へ「LogicHiveを活用する」というルールを追記します。
 
 ### 3. システムの起動
