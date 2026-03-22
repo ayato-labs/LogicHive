@@ -31,9 +31,10 @@ class AutoBackupManager:
         Uses GitHub API to ensure a private backup repo exists and is linked.
         """
         if not GITHUB_TOKEN:
-            logger.error(
-                "AutoBackup: GITHUB_TOKEN is missing in .env. Remote sync is disabled."
-            )
+            if ENABLE_AUTO_BACKUP:
+                logger.debug(
+                    "AutoBackup: GITHUB_TOKEN is not set. Skipping remote sync."
+                )
             return False
 
         try:

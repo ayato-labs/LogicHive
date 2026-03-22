@@ -105,7 +105,8 @@ async def do_delete_async(name: str) -> bool:
         asyncio.create_task(vector_manager.remove_vector(name))
 
         # 3. Backup Archiving (background)
-        if ENABLE_AUTO_BACKUP:
+        # ユーザーがバックアップを有効にしており、かつトークンが存在する場合のみ実行
+        if ENABLE_AUTO_BACKUP and GITHUB_TOKEN:
             from storage.auto_backup import backup_manager
 
             asyncio.create_task(backup_manager.archive_asset(name))
@@ -200,7 +201,8 @@ async def do_save_async(
     save_result = await sqlite_storage.upsert_function(data)
 
     # 8. Trigger Background Auto-Backup (Fire-and-forget)
-    if save_result and ENABLE_AUTO_BACKUP:
+    # ユーザーがバックアップを有効にしており、かつトークンが存在する場合のみ実行
+    if save_result and ENABLE_AUTO_BACKUP and GITHUB_TOKEN:
         from storage.auto_backup import backup_manager
 
         asyncio.create_task(backup_manager.process_backup(data))
