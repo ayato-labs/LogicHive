@@ -3,6 +3,7 @@ import pytest
 import uuid
 from storage.sqlite_api import sqlite_storage
 
+
 @pytest.mark.async_timeout(30)
 @pytest.mark.asyncio
 async def test_concurrent_upserts():
@@ -10,7 +11,7 @@ async def test_concurrent_upserts():
     Simulate multiple concurrent upsert operations to verify the asyncio.Lock fix.
     """
     concurrency_count = 10
-    
+
     async def task(i):
         name = f"concurrent_func_{i}"
         data = {
@@ -22,13 +23,15 @@ async def test_concurrent_upserts():
             "tags": ["test", "concurrency"],
             "reliability_score": 0.95,
             "code_hash": f"hash_{i}",
-            "embedding": [0.1] * 1536 # Dummy embedding
+            "embedding": [0.1] * 1536,  # Dummy embedding
         }
         return await sqlite_storage.upsert_function(data)
 
     # Execute concurrent tasks
-    results = await asyncio.gather(*(task(i) for i in range(concurrency_count)), return_exceptions=True)
-    
+    results = await asyncio.gather(
+        *(task(i) for i in range(concurrency_count)), return_exceptions=True
+    )
+
     # Check for exceptions
     for res in results:
         if isinstance(res, Exception):

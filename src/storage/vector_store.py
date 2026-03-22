@@ -127,12 +127,14 @@ class VectorIndexManager:
                 if old_id in self.id_to_name:
                     del self.id_to_name[old_id]
                 del self.name_to_id[name]
-                
+
                 await self.save_to_disk()
-                
+
                 ghost_count = self.index.ntotal - len(self.id_to_name)
                 if ghost_count > FAISS_GHOST_REBUILD_THRESHOLD:
-                    logger.info("FAISS: Ghost vectors exceeded threshold during removal, rebuilding.")
+                    logger.info(
+                        "FAISS: Ghost vectors exceeded threshold during removal, rebuilding."
+                    )
                     await self._rebuild_internal()
 
     async def rebuild_index(self):

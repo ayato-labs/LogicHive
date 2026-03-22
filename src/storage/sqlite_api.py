@@ -199,11 +199,17 @@ class SqliteStorage:
             vector_matches = []
             if embedding and len(embedding) == VECTOR_DIMENSION:
                 try:
-                    vector_matches = await vector_manager.search(embedding, limit=limit * 5)
+                    vector_matches = await vector_manager.search(
+                        embedding, limit=limit * 5
+                    )
                 except Exception as ve:
-                    logger.warning(f"SQLite: Vector search failed, falling back to pure SQL: {ve}")
+                    logger.warning(
+                        f"SQLite: Vector search failed, falling back to pure SQL: {ve}"
+                    )
             else:
-                logger.info("SQLite: Empty or invalid embedding, performing pure SQL/Tag search.")
+                logger.info(
+                    "SQLite: Empty or invalid embedding, performing pure SQL/Tag search."
+                )
 
             # 3. Perform SQL Keyword/Tag/Language Search (High-precision results)
             sql_results = {}
@@ -225,16 +231,18 @@ class SqliteStorage:
 
                 # Keyword Match (Name or Description) - Support multi-word matching
                 if query_text:
-                    words = [w.strip() for w in query_text.split() if len(w.strip()) > 2]
-                    if not words: # Fallback for very short queries
+                    words = [
+                        w.strip() for w in query_text.split() if len(w.strip()) > 2
+                    ]
+                    if not words:  # Fallback for very short queries
                         words = [query_text.strip()]
-                    
+
                     word_conditions = []
                     for word in words:
                         word_conditions.append("(name LIKE ? OR description LIKE ?)")
                         term = f"%{word.lower()}%"
                         params.extend([term, term])
-                    
+
                     if word_conditions:
                         conditions.append(f"({' OR '.join(word_conditions)})")
 
@@ -297,7 +305,7 @@ class SqliteStorage:
                 # Apply language filter even to hydrated results if specified
                 lang_clause = "AND LOWER(language) = LOWER(?)" if language else ""
                 sql = f"SELECT * FROM logichive_functions WHERE name IN ({placeholders}) {lang_clause}"
-                
+
                 query_params = names_to_hydrate.copy()
                 if language:
                     query_params.append(language)
@@ -319,7 +327,7 @@ class SqliteStorage:
             return sorted_results[:limit]
 
         except Exception as e:
-            logger.error(f"SQLite: Hybrid search failed", exc_info=True)
+            logger.error("SQLite: Hybrid search failed", exc_info=True)
             # Return detailed error if possible
             error_msg = f"{type(e).__name__}: {str(e)}"
             raise StorageError(f"Hybrid search failed: {error_msg}")

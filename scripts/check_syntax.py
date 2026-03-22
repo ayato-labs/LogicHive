@@ -1,4 +1,4 @@
-import sys
+
 
 def check_file(path):
     print(f"Checking {path}...")
@@ -13,6 +13,7 @@ def check_file(path):
         print(f"  Error: {e.msg}")
     except Exception as e:
         print(f"❌ Error in {path}: {e}")
+
 
 if __name__ == "__main__":
     check_file("src/storage/sqlite_api.py")

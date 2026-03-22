@@ -1,7 +1,6 @@
 import pytest
-import json
 from storage.sqlite_api import sqlite_storage, vector_manager
-from core.exceptions import StorageError
+
 
 @pytest.mark.asyncio
 async def test_upsert_and_retrieve_function(test_db):
@@ -17,13 +16,13 @@ async def test_upsert_and_retrieve_function(test_db):
         "embedding": [0.1] * 768,
         "code_hash": "hash123",
         "dependencies": ["pytest", "requests"],
-        "test_code": "assert True"
+        "test_code": "assert True",
     }
-    
+
     # Save
     success = await sqlite_storage.upsert_function(data)
     assert success is True
-    
+
     # Retrieve
     retrieved = await sqlite_storage.get_function_by_name("test_func")
     assert retrieved is not None
@@ -31,13 +30,16 @@ async def test_upsert_and_retrieve_function(test_db):
     assert retrieved["dependencies"] == ["pytest", "requests"]
     assert retrieved["test_code"] == "assert True"
     assert retrieved["version"] == 1
-    
+
     # Assert JSON array parsing
     assert isinstance(retrieved["embedding"], list)
     assert len(retrieved["embedding"]) == 768
-    
+
     # Assert FAISS index sync
-    assert len(vector_manager.id_to_name) == 1, "FAISS manager should have exactly 1 active mapping"
+    assert len(vector_manager.id_to_name) == 1, (
+        "FAISS manager should have exactly 1 active mapping"
+    )
+
 
 @pytest.mark.asyncio
 async def test_versioning_on_code_change(test_db):
@@ -47,25 +49,28 @@ async def test_versioning_on_code_change(test_db):
         "name": name,
         "code": "v1 code",
         "code_hash": "hash1",
-        "embedding": [0.1] * 768
+        "embedding": [0.1] * 768,
     }
-    
+
     await sqlite_storage.upsert_function(data1)
-    
+
     data2 = data1.copy()
     data2["code"] = "v2 code"
     data2["code_hash"] = "hash2"
-    
+
     await sqlite_storage.upsert_function(data2)
-    
+
     retrieved = await sqlite_storage.get_function_by_name(name)
     assert retrieved["version"] == 2
     assert retrieved["code"] == "v2 code"
-    
+
     # Check history (directly via DB connection for verification)
     from core.db import get_db_connection
+
     db = await get_db_connection()
-    async with db.execute("SELECT * FROM logichive_function_history WHERE name = ?", (name,)) as cursor:
+    async with db.execute(
+        "SELECT * FROM logichive_function_history WHERE name = ?", (name,)
+    ) as cursor:
         rows = await cursor.fetchall()
         assert len(rows) == 1, "There should be exactly 1 archived version"
         history_row = dict(rows[0])
@@ -75,28 +80,40 @@ async def test_versioning_on_code_change(test_db):
     await db.close()
 
     # Verify FAISS didn't duplicate the mapping (should be 1 active name)
-    assert len(vector_manager.id_to_name) == 1, "FAISS manager should have exactly 1 active mapping"
+    assert len(vector_manager.id_to_name) == 1, (
+        "FAISS manager should have exactly 1 active mapping"
+    )
     assert "version_test" in vector_manager.name_to_id
+
 
 @pytest.mark.asyncio
 async def test_semantic_search_real_faiss(test_db):
     """Tests semantic search using the real FAISS manager."""
     # Ensure vector manager is empty due to conftest clear_cache fixture
-    
+
     func1_emb = [0.0] * 768
     func1_emb[0] = 1.0  # Vector toward axis 0
     func2_emb = [0.0] * 768
     func2_emb[1] = 1.0  # Vector toward axis 1
-    
-    await sqlite_storage.upsert_function({"name": "math_util", "embedding": func1_emb, "code": "...", "code_hash": "h1"})
-    await sqlite_storage.upsert_function({"name": "string_util", "embedding": func2_emb, "code": "...", "code_hash": "h2"})
-    
+
+    await sqlite_storage.upsert_function(
+        {"name": "math_util", "embedding": func1_emb, "code": "...", "code_hash": "h1"}
+    )
+    await sqlite_storage.upsert_function(
+        {
+            "name": "string_util",
+            "embedding": func2_emb,
+            "code": "...",
+            "code_hash": "h2",
+        }
+    )
+
     # Search for something near func2 (axis 1)
     query_emb = [0.0] * 768
     query_emb[1] = 0.9
     query_emb[0] = 0.1
     results = await sqlite_storage.find_similar_functions(query_emb, limit=1)
-    
+
     assert len(results) > 0
     assert results[0]["name"] == "string_util"
     assert results[0]["similarity"] > 0.8

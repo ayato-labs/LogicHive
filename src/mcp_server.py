@@ -1,6 +1,6 @@
 from fastmcp import FastMCP
 import orchestrator
-from orchestrator import do_save_async, do_delete_async, do_get_async, do_search_async
+from orchestrator import do_save_async, do_delete_async
 from core.exceptions import LogicHiveError, ValidationError
 
 # Initialize FastMCP server
@@ -8,12 +8,10 @@ mcp = FastMCP("LogicHive")
 
 
 @mcp.tool()
-async def search_functions(
-    query: str, limit: int = 5, language: str = None
-) -> str:
+async def search_functions(query: str, limit: int = 5, language: str = None) -> str:
     """
     Search for high-quality, reusable code functions within the LogicHive vault using Hybrid Search.
-    This is the primary tool for knowledge retrieval. Use it when you need to find existing 
+    This is the primary tool for knowledge retrieval. Use it when you need to find existing
     implementations or avoid reinventing code.
 
     SEARCH MODES:
@@ -33,12 +31,19 @@ async def search_functions(
 
     md = "### Search Results\n\n"
     for res in results:
+        is_draft = res.get("is_draft", False)
         name = res["name"]
+        if is_draft:
+            name = f"⚠️ [AI-DRAFT] {name}"
+
         sim = res.get("similarity", 0)
         rel = res.get("reliability_score", 0) * 100
         desc = res.get("description", "No description")
         tags = ", ".join(res.get("tags", []))
+
         md += f"- **{name}** (Match: {sim:.2f}, Reliability: {rel:.1f}%)\n"
+        if is_draft:
+            md += "  - *NOTE: This is a generated draft. Refine and Save to verify.*\n"
         md += f"  - *{desc}*\n"
         md += f"  - Tags: {tags}\n"
     return md
@@ -62,7 +67,7 @@ async def get_function(name: str) -> str:
     desc = f_data.get("description", "No description")
     tags = ", ".join(f_data.get("tags", []))
     deps = ", ".join(f_data.get("dependencies", []))
-    
+
     return f"**Function: {name}**\n\n{desc}\n\n**Tags:** {tags}\n**Dependencies:** {deps}\n\n```{lang}\n{code}\n```"
 
 
@@ -81,7 +86,7 @@ async def save_function(
     The asset undergoes an automated Quality Gate check (AI grading & Static analysis).
 
     BEST PRACTICES FOR AI AGENTS:
-    1. Metadata is Critical: Provide a detailed 'description' (min 10 chars) explaining 
+    1. Metadata is Critical: Provide a detailed 'description' (min 10 chars) explaining
        the "why" and "how".
     2. Taxonomize: Use relevant 'tags' to ensure future discoverability.
     3. Self-Test: Always include 'test_code' if possible to increase reliability score.
@@ -129,27 +134,29 @@ async def debug_db() -> str:
     from core.config import SQLITE_DB_PATH
     import os
     import sqlite3
-    
+
     status = [f"SQLITE_DB_PATH: {SQLITE_DB_PATH}"]
     status.append(f"Exists: {os.path.exists(SQLITE_DB_PATH)}")
-    
+
     if os.path.exists(SQLITE_DB_PATH):
         try:
             status.append(f"Size: {os.path.getsize(SQLITE_DB_PATH)} bytes")
             conn = sqlite3.connect(SQLITE_DB_PATH)
-            tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+            tables = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
             status.append(f"Tables: {tables}")
             conn.close()
         except Exception as e:
             status.append(f"Error reading DB: {e}")
-            
+
     return "\n".join(status)
 
 
 @mcp.tool()
 async def delete_function(name: str) -> str:
     """
-    Deletes a function from the LogicHive vault. 
+    Deletes a function from the LogicHive vault.
     The function is archived in the backup repository for safety.
 
     Args:

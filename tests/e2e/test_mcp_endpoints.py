@@ -1,15 +1,15 @@
 import pytest
 import mcp_server
 
+
 @pytest.mark.asyncio
 async def test_mcp_save_tool(test_db, mock_intel):
     """Verifies the MCP save tool wrapper."""
     result = await mcp_server.save_function(
-        name="mcp_test",
-        code="print('hello')",
-        description="test tool"
+        name="mcp_test", code="print('hello')", description="test tool"
     )
     assert "Saved successfully" in result
+
 
 @pytest.mark.asyncio
 async def test_mcp_get_tool_success(test_db, mock_intel):
@@ -18,6 +18,7 @@ async def test_mcp_get_tool_success(test_db, mock_intel):
     result = await mcp_server.get_function("tool_get_test")
     assert "```python" in result
     assert "x = 1" in result
+
 
 @pytest.mark.asyncio
 async def test_mcp_search_tool(test_db, mock_intel):

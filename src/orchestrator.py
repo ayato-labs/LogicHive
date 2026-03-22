@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 # --- Helpers ---
 
+
 def extract_dependencies(code: str, language: str = "python") -> list[str]:
     """
     Extracts dependencies based on language.
@@ -70,8 +71,22 @@ def extract_dependencies(code: str, language: str = "python") -> list[str]:
 
     # Clean up standard libs/internal refs
     std_lib = {
-        "os", "sys", "json", "math", "datetime", "typing", "asyncio", "logging",
-        "ast", "pathlib", "abc", "fs", "path", "http", "https", "crypto"
+        "os",
+        "sys",
+        "json",
+        "math",
+        "datetime",
+        "typing",
+        "asyncio",
+        "logging",
+        "ast",
+        "pathlib",
+        "abc",
+        "fs",
+        "path",
+        "http",
+        "https",
+        "crypto",
     }
     return sorted(list(dependencies - std_lib))
 
@@ -92,6 +107,7 @@ async def do_delete_async(name: str) -> bool:
         # 3. Backup Archiving (background)
         if ENABLE_AUTO_BACKUP:
             from storage.auto_backup import backup_manager
+
             asyncio.create_task(backup_manager.archive_asset(name))
 
         return True
@@ -101,6 +117,7 @@ async def do_delete_async(name: str) -> bool:
 
 
 # --- MCP / REST API Implementation Wrappers ---
+
 
 async def do_save_async(
     name: str,
@@ -146,7 +163,7 @@ async def do_save_async(
 
     # 3. LLM Metadata Enrichment / Embedding prep
     intel = LogicIntelligence(GEMINI_API_KEY)
-    
+
     # Enrich description and tags if needed
     if not description or not tags:
         enriched = intel.optimize_metadata(name, code, description, tags)
@@ -181,12 +198,13 @@ async def do_save_async(
     }
 
     save_result = await sqlite_storage.upsert_function(data)
-    
+
     # 8. Trigger Background Auto-Backup (Fire-and-forget)
     if save_result and ENABLE_AUTO_BACKUP:
         from storage.auto_backup import backup_manager
+
         asyncio.create_task(backup_manager.process_backup(data))
-        
+
     return save_result
 
 
@@ -202,17 +220,37 @@ async def do_search_async(query: str, limit: int = 5, language: Optional[str] = 
     expanded_query = await intel.expand_query(query)
     query_emb = await intel.generate_embedding(expanded_query)
 
-    logger.info(f"Orchestrator: Performing hybrid search for '{query}' (Lang: {language})")
-    
+    logger.info(
+        f"Orchestrator: Performing hybrid search for '{query}' (Lang: {language})"
+    )
+
     # 1. Fetch more candidates than requested for re-ranking (limit * 3)
     initial_results = await sqlite_storage.find_similar_functions(
         query_emb, query_text=query, limit=limit * 3, language=language
     )
-    
+
     # 2. Re-rank using LLM
     logger.info(f"Orchestrator: Re-ranking {len(initial_results)} candidates...")
     reranked_results = await intel.rerank_results(query, initial_results, limit=limit)
-    
+
+    # 3. Fallback: Auto-Draft Generation (Experimental)
+    # Trigger if results are empty or top match is weak (similarity < 0.45)
+    top_score = reranked_results[0].get("similarity", 0) if reranked_results else 0
+    if top_score < 0.45:
+        logger.info(
+            f"Orchestrator: Weak results (Score: {top_score:.2f}). Triggering Auto-Draft Generator..."
+        )
+        from core.plugins.draft_generator import DraftGenerator
+
+        generator = DraftGenerator(intel)
+        draft = await generator.generate_draft(
+            query, initial_results, language=language or "python"
+        )
+        if draft:
+            # Prepend draft to results (or return only draft if requested)
+            return [draft] + reranked_results
+
     return reranked_results
+
 
 # --- End of Orchestrator ---

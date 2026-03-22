@@ -7,14 +7,17 @@ LOGICHIVE_ROOT = r"C:\Users\saiha\My_Service\programing\MCP\LogicHive"
 sys.path.append(os.path.join(LOGICHIVE_ROOT, "src"))
 
 # Force absolute paths for this execution
-os.environ["SQLITE_DB_PATH"] = os.path.join(LOGICHIVE_ROOT, "storage", "data", "logichive.db")
+os.environ["SQLITE_DB_PATH"] = os.path.join(
+    LOGICHIVE_ROOT, "storage", "data", "logichive.db"
+)
 os.environ["FS_DATA_DIR"] = os.path.join(LOGICHIVE_ROOT, "storage", "data")
 
 import orchestrator
 
+
 async def self_anatomy():
     print("Extracting parse_llm_tool_calls logic to LogicHive...")
-    
+
     code = """from typing import Any
 
 def parse_llm_tool_calls(calls: list[Any]) -> list[dict[str, Any]]:
@@ -41,19 +44,20 @@ def parse_llm_tool_calls(calls: list[Any]) -> list[dict[str, Any]]:
             parsed.append({"name": name.lower(), "args": args})
     return parsed
 """
-    
+
     success = await orchestrator.do_save_async(
         name="parse_llm_tool_calls",
         code=code,
         description="Converts raw tool calls from an LLM into a standardized internal dictionary format. Supports various call styles.",
         tags=["llm", "tool_calling", "mcp_client", "normalization"],
-        language="python"
+        language="python",
     )
-    
+
     if success:
         print("✅ SUCCESS: parse_llm_tool_calls saved to LogicHive.")
     else:
         print("❌ FAILED to save to LogicHive.")
+
 
 if __name__ == "__main__":
     asyncio.run(self_anatomy())

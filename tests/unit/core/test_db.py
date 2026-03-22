@@ -1,13 +1,14 @@
 import pytest
-import asyncio
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import AsyncMock, patch
 import aiosqlite
 
 # The decorator is in core.db
 from core.db import retry_on_db_lock
 
+
 class MockOperationalError(aiosqlite.OperationalError):
     pass
+
 
 @pytest.mark.asyncio
 async def test_retry_on_db_lock_success():
@@ -20,6 +21,7 @@ async def test_retry_on_db_lock_success():
     assert result == "success"
     mock_func.assert_called_once_with("arg", kw="arg")
 
+
 @pytest.mark.asyncio
 async def test_retry_on_db_lock_retry_then_success():
     """Test that it retries once and then succeeds on 'database is locked'."""
@@ -27,7 +29,7 @@ async def test_retry_on_db_lock_retry_then_success():
     # Raise a real-looking OperationalError
     mock_func.side_effect = [
         aiosqlite.OperationalError("database is locked"),
-        "success"
+        "success",
     ]
 
     with patch("asyncio.sleep", AsyncMock()) as mock_sleep:
@@ -37,6 +39,7 @@ async def test_retry_on_db_lock_retry_then_success():
         assert result == "success"
         assert mock_func.call_count == 2
         mock_sleep.assert_called_once_with(0.1)
+
 
 @pytest.mark.asyncio
 async def test_retry_on_db_lock_max_retries_exceeded():
@@ -50,9 +53,10 @@ async def test_retry_on_db_lock_max_retries_exceeded():
 
         with pytest.raises(aiosqlite.OperationalError) as excinfo:
             await decorated()
-        
+
         assert "database is locked" in str(excinfo.value)
         assert mock_func.call_count == max_retries + 1
+
 
 @pytest.mark.asyncio
 async def test_retry_on_db_lock_other_error():
@@ -65,7 +69,7 @@ async def test_retry_on_db_lock_other_error():
 
         with pytest.raises(aiosqlite.OperationalError) as excinfo:
             await decorated()
-        
+
         assert "some other error" in str(excinfo.value)
         assert mock_func.call_count == 1
         assert mock_sleep.call_count == 0

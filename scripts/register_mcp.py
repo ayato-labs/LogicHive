@@ -1,26 +1,97 @@
 import json
 import os
-import sys
+import platform
 from pathlib import Path
 
+
 def get_config_paths():
-    """Returns a list of potential MCP config file paths."""
+    """Returns a list of potential MCP config file paths based on OS."""
     home = Path.home()
-    appdata = Path(os.getenv("APPDATA", ""))
-    
+    system = platform.system()
+
     paths = {
         "Antigravity": home / ".gemini" / "antigravity" / "mcp_config.json",
-        "Cursor": appdata / "Cursor" / "User" / "globalStorage" / "heavy.cursor.cursor" / "mcp_config.json",
-        "CloudCode": appdata / "Code" / "User" / "globalStorage" / "googlecloudtools.cloudcode" / "mcp_config.json",
-        "VSCode_Generic": appdata / "Code" / "User" / "globalStorage" / "mcp_config.json", # Some extensions use this
+        "GeminiCLI": home / ".gemini" / "settings.json",
     }
+
+    if system == "Windows":
+        appdata = Path(os.getenv("APPDATA", home / "AppData/Roaming"))
+        paths.update(
+            {
+                "Cursor": appdata
+                / "Cursor"
+                / "User"
+                / "globalStorage"
+                / "heavy.cursor.cursor"
+                / "mcp_config.json",
+                "CloudCode": appdata
+                / "Code"
+                / "User"
+                / "globalStorage"
+                / "googlecloudtools.cloudcode"
+                / "mcp_config.json",
+                "VSCode_Generic": appdata
+                / "Code"
+                / "User"
+                / "globalStorage"
+                / "mcp_config.json",
+            }
+        )
+    elif system == "Darwin":  # macOS
+        lib_app_support = home / "Library" / "Application Support"
+        paths.update(
+            {
+                "Cursor": lib_app_support
+                / "Cursor"
+                / "User"
+                / "globalStorage"
+                / "heavy.cursor.cursor"
+                / "mcp_config.json",
+                "CloudCode": lib_app_support
+                / "Code"
+                / "User"
+                / "globalStorage"
+                / "googlecloudtools.cloudcode"
+                / "mcp_config.json",
+                "VSCode_Generic": lib_app_support
+                / "Code"
+                / "User"
+                / "globalStorage"
+                / "mcp_config.json",
+            }
+        )
+    else:  # Linux
+        config_dir = home / ".config"
+        paths.update(
+            {
+                "Cursor": config_dir
+                / "Cursor"
+                / "User"
+                / "globalStorage"
+                / "heavy.cursor.cursor"
+                / "mcp_config.json",
+                "CloudCode": config_dir
+                / "Code"
+                / "User"
+                / "globalStorage"
+                / "googlecloudtools.cloudcode"
+                / "mcp_config.json",
+                "VSCode_Generic": config_dir
+                / "Code"
+                / "User"
+                / "globalStorage"
+                / "mcp_config.json",
+            }
+        )
+
     return paths
+
 
 def inject_instructions():
     """Injects usage instructions into AI agent instruction files."""
     home = Path.home()
     gemini_md = home / ".gemini" / "GEMINI.md"
-    instruction = "- function-storeっていうMCPを活用してください。"
+    instruction = "- LogicHiveっていうMCPを活用してください。"
 
     if gemini_md.exists():
         try:
@@ -48,40 +119,44 @@ def inject_instructions():
             except Exception as e:
                 print(f"[WARNING] Failed to create {gemini_md}: {e}")
 
+
 def register():
-    print("--- LogicHive: Multi-Agent MCP Registration ---")
-    
-    project_root = Path(__file__).parent.parent.absolute()
-    # Normalize path for Windows JSON (forward slashes)
+    print("--- LogicHive: Multi-Agent MCP Registration (Dynamic) ---")
+
+    # Calculate project root dynamically relative to this script
+    script_dir = Path(__file__).parent.absolute()
+    project_root = script_dir.parent
+
+    # Normalize path for JSON config (using forward slashes for cross-platform stability)
     root_str = str(project_root).replace("\\", "/")
-    
+
+    # Use platform-specific path separator for PYTHONPATH
+    pythonpath = f"{root_str}{os.pathsep}{root_str}/src"
+
     server_config = {
         "command": "uv",
         "args": [
             "run",
             "--project",
             root_str,
-            "--with",
-            "fastmcp",
+            "--no-sync",
             "python",
-            f"{root_str}/src/mcp_server.py"
+            f"{root_str}/src/mcp_server.py",
         ],
-        "env": {
-            "PYTHONPATH": f"{root_str};{root_str}/src"
-        }
+        "env": {"PYTHONPATH": pythonpath},
     }
-    
-    config_entry = {"logic-hive": server_config}
+
     paths = get_config_paths()
-    
+
     count = 0
     for name, path in paths.items():
         if not path.parent.exists():
             continue
-            
+
         print(f"[INFO] Checking {name} configuration at {path}...")
-        
+
         # Load existing or create new
+        content = {}
         if path.exists():
             try:
                 with open(path, "r", encoding="utf-8") as f:
@@ -89,15 +164,13 @@ def register():
             except Exception as e:
                 print(f"[WARNING] Could not read {path}: {e}")
                 continue
-        else:
-            content = {}
 
         if "mcpServers" not in content:
             content["mcpServers"] = {}
-            
+
         # Inject server
         content["mcpServers"]["logic-hive"] = server_config
-        
+
         try:
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(content, f, indent=2)
@@ -111,10 +184,13 @@ def register():
 
     if count == 0:
         print("\n[NOTE] No active MCP environments were detected.")
-        print("Please ensure your AI agents (Cursor, VS Code + Cloud Code, etc.) are installed.")
+        print(
+            "Please ensure your AI agents (Cursor, VS Code + Cloud Code, Gemini CLI, etc.) are installed."
+        )
     else:
         print(f"\n[READY] LogicHive registered in {count} environment(s).")
         print("Please restart your AI agents to apply changes.")
+
 
 if __name__ == "__main__":
     register()

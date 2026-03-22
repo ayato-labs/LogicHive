@@ -7,16 +7,19 @@ sys.path.append(os.path.abspath("src"))
 
 from orchestrator import do_save_async
 from core.exceptions import ValidationError
-from storage.sqlite_api import sqlite_storage, vector_manager
+from storage.sqlite_api import vector_manager
+
 
 async def test_python_quality():
     print("--- Testing Python Quality Gate ---")
-    bad_python = "def fail():\n  pass" # Too trivial
+    bad_python = "def fail():\n  pass"  # Too trivial
     try:
-        await do_save_async("fail_func", bad_python, "Trivial function", language="python")
+        await do_save_async(
+            "fail_func", bad_python, "Trivial function", language="python"
+        )
         print("❌ Error: Trivial Python function should have been rejected.")
-    except ValidationError as e:
-        print(f"✅ Correctly rejected trivial Python.")
+    except ValidationError:
+        print("✅ Correctly rejected trivial Python.")
 
     good_python = """
 def calculate_fibonacci(n: int) -> int:
@@ -29,7 +32,9 @@ def calculate_fibonacci(n: int) -> int:
     return b
 """
     try:
-        success = await do_save_async("fib_func", good_python, "Calculates fib", language="python")
+        success = await do_save_async(
+            "fib_func", good_python, "Calculates fib", language="python"
+        )
         if success:
             print("✅ Successfully saved high-quality Python function.")
         else:
@@ -37,14 +42,16 @@ def calculate_fibonacci(n: int) -> int:
     except Exception as e:
         print(f"❌ Error: {e}")
 
+
 async def test_llm_syntax_gate():
     print("\n--- Testing LLM Syntax Gate (C++) ---")
     bad_cpp = "int main() { return 0 // Missing bracket"
     try:
         await do_save_async("bad_cpp", bad_cpp, "Missing bracket C++", language="cpp")
         print("❌ Error: Syntax-broken C++ should have been rejected by LLM.")
-    except ValidationError as e:
-        print(f"✅ Correctly rejected broken C++.")
+    except ValidationError:
+        print("✅ Correctly rejected broken C++.")
+
 
 async def test_faiss_rebuild():
     print("\n--- Testing FAISS Rebuild ---")
@@ -57,11 +64,12 @@ async def test_faiss_rebuild():
     await vector_manager.rebuild_index()
     after_rebuild = vector_manager.index.ntotal
     print(f"After rebuild total: {after_rebuild}")
-    
+
     if initial_total == after_rebuild:
         print("✅ FAISS rebuild successful (consistent with DB).")
     else:
         print("❌ FAISS rebuild discrepancy detected.")
+
 
 if __name__ == "__main__":
     asyncio.run(test_python_quality())

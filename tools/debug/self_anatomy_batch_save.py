@@ -1,31 +1,30 @@
 import asyncio
 import os
 import sys
-import re
 
 # Add LogicHive src to path
 LOGICHIVE_ROOT = r"C:\Users\saiha\My_Service\programing\MCP\LogicHive"
 sys.path.append(os.path.join(LOGICHIVE_ROOT, "src"))
 
 # Force absolute paths for this execution
-os.environ["SQLITE_DB_PATH"] = os.path.join(LOGICHIVE_ROOT, "storage", "data", "logichive.db")
+os.environ["SQLITE_DB_PATH"] = os.path.join(
+    LOGICHIVE_ROOT, "storage", "data", "logichive.db"
+)
 os.environ["FS_DATA_DIR"] = os.path.join(LOGICHIVE_ROOT, "storage", "data")
 
 import orchestrator
 
+
 async def save_to_vault(name, code, description, tags):
     print(f"Saving {name}...")
     success = await orchestrator.do_save_async(
-        name=name,
-        code=code,
-        description=description,
-        tags=tags,
-        language="python"
+        name=name, code=code, description=description, tags=tags, language="python"
     )
     if success:
         print(f"  ✅ {name} saved.")
     else:
         print(f"  ❌ {name} failed.")
+
 
 async def batch_evolution():
     # 1. infer_path_from_content
@@ -45,7 +44,12 @@ def infer_path_from_content(content: str) -> str | None:
         return match.group(1).strip()
     return None
 """
-    await save_to_vault("infer_path_from_content", code_1, "Infers file paths from source code comments using regex heuristics.", ["utility", "heuristics", "file_management"])
+    await save_to_vault(
+        "infer_path_from_content",
+        code_1,
+        "Infers file paths from source code comments using regex heuristics.",
+        ["utility", "heuristics", "file_management"],
+    )
 
     # 2. format_shell_output
     code_2 = """def format_shell_output(stdout: str, stderr: str, returncode: int) -> str:
@@ -58,7 +62,12 @@ def infer_path_from_content(content: str) -> str | None:
     return f"[{status}]\\n{output}"
 """
     # Note: the double backslash is needed for f-string escaping in the script generating script
-    await save_to_vault("format_shell_output", code_2.replace("\\n", "\\\\n"), "Standardizes shell command results into a readable format for AI agents.", ["utility", "shell", "formatting"])
+    await save_to_vault(
+        "format_shell_output",
+        code_2.replace("\\n", "\\\\n"),
+        "Standardizes shell command results into a readable format for AI agents.",
+        ["utility", "shell", "formatting"],
+    )
 
     # 3. get_mcp_server_for_tool
     code_3 = """def get_mcp_server_for_tool(tool_name: str, tool_to_client_map: dict[str, str]) -> str | None:
@@ -68,7 +77,12 @@ def infer_path_from_content(content: str) -> str | None:
     \"\"\"
     return tool_to_client_map.get(tool_name)
 """
-    await save_to_vault("get_mcp_server_for_tool", code_3, "Retrieves the target MCP server for a given tool name from a registry mapping.", ["mcp", "dispatch", "utility"])
+    await save_to_vault(
+        "get_mcp_server_for_tool",
+        code_3,
+        "Retrieves the target MCP server for a given tool name from a registry mapping.",
+        ["mcp", "dispatch", "utility"],
+    )
 
     # 4. normalize_container_path
     code_4 = """def normalize_container_path(path: str) -> str:
@@ -77,7 +91,13 @@ def infer_path_from_content(content: str) -> str | None:
     \"\"\"
     return path.replace("\\\\", "/")
 """
-    await save_to_vault("normalize_container_path", code_4.replace("\\\\", "\\\\\\\\"), "Converts Windows paths to POSIX-style paths for Docker container compatibility.", ["utility", "docker", "path"])
+    await save_to_vault(
+        "normalize_container_path",
+        code_4.replace("\\\\", "\\\\\\\\"),
+        "Converts Windows paths to POSIX-style paths for Docker container compatibility.",
+        ["utility", "docker", "path"],
+    )
+
 
 if __name__ == "__main__":
     asyncio.run(batch_evolution())

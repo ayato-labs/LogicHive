@@ -239,11 +239,13 @@ class LogicIntelligence:
 
         # Only re-rank top N to save tokens/time
         candidates = results[:15]
-        
+
         # Prepare candidates for LLM review (Name + Description + Code snippet)
         formatted_candidates = []
         for i, res in enumerate(candidates):
-            code_snippet = res["code"][:500] + "..." if len(res["code"]) > 500 else res["code"]
+            code_snippet = (
+                res["code"][:500] + "..." if len(res["code"]) > 500 else res["code"]
+            )
             formatted_candidates.append(
                 f"ID: {i}\nNAME: {res['name']}\nDESC: {res['description']}\nCODE:\n{code_snippet}\n---"
             )
@@ -262,10 +264,11 @@ class LogicIntelligence:
             raw_res = await self._call_llm_async(prompt, use_json=False)
             # Try to extract list from response
             import re
+
             match = re.search(r"\[[\d,\s]+\]", raw_res)
             if match:
                 ordered_ids = json.loads(match.group(0))
-                
+
                 # Re-order based on LLM feedback
                 reranked = []
                 seen_ids = set()
@@ -273,19 +276,21 @@ class LogicIntelligence:
                     if 0 <= idx < len(candidates) and idx not in seen_ids:
                         reranked.append(candidates[idx])
                         seen_ids.add(idx)
-                
+
                 # Add any missing candidates at the end
                 for i, c in enumerate(candidates):
                     if i not in seen_ids:
                         reranked.append(c)
-                
+
                 # Combine with the rest of the original results
                 final_results = reranked + results[15:]
                 logger.info(f"Consolidation: Re-ranking complete for '{query}'")
                 return final_results[:limit]
         except Exception as e:
-            logger.warning(f"Consolidation: Re-ranking failed: {e}. Falling back to original order.")
-        
+            logger.warning(
+                f"Consolidation: Re-ranking failed: {e}. Falling back to original order."
+            )
+
         return results[:limit]
 
     def construct_search_document(

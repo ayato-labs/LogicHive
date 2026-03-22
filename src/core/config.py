@@ -12,7 +12,7 @@ load_dotenv()
 # 必要に応じて環境変数での上書き（Override）も可能です。
 
 # 1. AI & Models
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") # デフォルト値を削除
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")  # デフォルト値を削除
 MODEL_TYPE = os.getenv("MODEL_TYPE", "gemini")  # "gemini" or "ollama"
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "models/gemma-3-27b-it")
 EMBEDDING_MODEL_ID = os.getenv("EMBEDDING_MODEL_ID", "gemini-embedding-001")

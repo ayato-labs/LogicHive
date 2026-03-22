@@ -1,6 +1,6 @@
 import pytest
-import asyncio
 from core.evaluation.plugins.static import RuffEvaluator
+
 
 @pytest.mark.asyncio
 async def test_ruff_evaluator_clean_code():
@@ -9,6 +9,7 @@ async def test_ruff_evaluator_clean_code():
     result = await evaluator.evaluate(code, "python")
     # If ruff is not installed, it returns 100. If it is and clean, 100.
     assert result.score == 100.0
+
 
 @pytest.mark.asyncio
 async def test_ruff_evaluator_with_issues():
@@ -20,6 +21,6 @@ async def test_ruff_evaluator_with_issues():
     # We check if it ran by looking at the reason or score.
     if "Ruff not available" in result.reason:
         pytest.skip("Ruff not installed in environment")
-    
+
     assert result.score < 100.0
     assert "Ruff: Found" in result.reason

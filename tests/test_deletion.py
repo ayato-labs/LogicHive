@@ -3,18 +3,24 @@ import sys
 import os
 
 # Add src to path
-sys.path.append(os.path.abspath('src'))
+sys.path.append(os.path.abspath("src"))
 
 import orchestrator
 from storage.sqlite_api import sqlite_storage
 import pytest
 
+
 @pytest.mark.asyncio
-@pytest.mark.skipif(not os.environ.get("GEMINI_API_KEY"), reason="Real Gemini API Key not set")
+@pytest.mark.skipif(
+    not os.environ.get("GEMINI_API_KEY"), reason="Real Gemini API Key not set"
+)
 async def test_deletion_integration():
     from core.config import ENABLE_AUTO_BACKUP
-    print(f"=== LogicHive: Deletion & Archiving Test (AutoBackup: {ENABLE_AUTO_BACKUP}) ===")
-    
+
+    print(
+        f"=== LogicHive: Deletion & Archiving Test (AutoBackup: {ENABLE_AUTO_BACKUP}) ==="
+    )
+
     # 1. First, ensure there's a test function
     test_name = "deletion_test_func"
     print(f"Creating test function '{test_name}'...")
@@ -31,16 +37,16 @@ async def test_deletion_integration():
 ''',
         language="python",
         description="A robust test function designed to pass quality gates for the deletion and archiving verification test.",
-        tags=["test", "utility"]
+        tags=["test", "utility"],
     )
-    
+
     # Wait for background backup
     await asyncio.sleep(5)
-    
+
     # 2. Delete it
     print(f"\nDeleting test function '{test_name}'...")
     success = await orchestrator.do_delete_async(test_name)
-    
+
     if success:
         print("✅ Orchestrator reported success.")
     else:
@@ -57,11 +63,10 @@ async def test_deletion_integration():
     # Wait for background archiving
     print("Waiting for background archiving to finish...")
     await asyncio.sleep(10)
-    
+
     # 4. Verify exports folder
     archive_dir = os.path.join("exports", "archives")
     if os.path.exists(archive_dir):
-        print(f"✅ Verified: Archives directory exists.")
+        print("✅ Verified: Archives directory exists.")
     else:
-        print(f"❌ Error: Archives directory NOT found.")
-
+        print("❌ Error: Archives directory NOT found.")
