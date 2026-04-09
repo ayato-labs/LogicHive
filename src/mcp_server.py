@@ -16,6 +16,9 @@ async def search_functions(
     This is the primary tool for knowledge retrieval. Use it when you need to find existing
     implementations or avoid reinventing code.
 
+    NOTE: This tool returns technical SUMMARIES (metadata) only. To see the full source code
+    of a function, use the 'get_function' tool with the name and project found in these results.
+
     SEARCH MODES:
     1. Semantic Search: Natural language queries (e.g., "authentication helper").
     2. Exact Match: Function names (e.g., "normalize_llm_args").

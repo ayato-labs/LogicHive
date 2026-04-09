@@ -50,7 +50,9 @@ class EphemeralPythonExecutor(BaseExecutor):
 
             # 2. Build uv run command
             # Syntax: uv run --with dep1 --with dep2 python harness.py
-            cmd = ["uv", "run", "--quiet"]
+            # --offline: Block network access for security
+            # --no-project: Prevent discovery of the current project's configuration
+            cmd = ["uv", "run", "--quiet", "--offline", "--no-project"]
             for dep in dependencies:
                 cmd.extend(["--with", dep])
             cmd.extend(["python", str(harness_file)])
@@ -171,9 +173,24 @@ results = {{
     "error": None
 }}
 
+def block_network(*args, **kwargs):
+    raise Exception("NETWORK_ACCESS_DENIED: LogicHive sandbox prevents network calls during verification.")
+
+def apply_sandbox():
+    import socket
+    socket.socket = block_network
+    socket.getaddrinfo = block_network
+    # Also block common high-level libs if already imported
+    for mod in ["urllib", "requests", "http.client"]:
+        if mod in sys.modules:
+            del sys.modules[mod]
+
 def run_user_code():
     global results
     try:
+        # 0. Apply runtime sandbox
+        apply_sandbox()
+        
         # 1. Execute the main code (defines functions/classes)
         # We use a custom dict to capture defined symbols if needed, 
         # but here we just exec in global scope.

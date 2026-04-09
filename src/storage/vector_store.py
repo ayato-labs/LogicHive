@@ -4,7 +4,7 @@ import asyncio
 import numpy as np
 import faiss
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from core.config import (
     VECTOR_DIMENSION,
     FAISS_INDEX_PATH,
@@ -211,37 +211,40 @@ class VectorIndexManager:
                 f"FAISS: Failed to save index to {self._index_path}: {e}", exc_info=True
             )
 
-    async def search(self, query_emb: List[float], limit: int = 5) -> List[tuple]:
+    async def search(self, query_emb: List[float], limit: int = 5, project: Optional[str] = None) -> List[tuple]:
         if not self._initialized:
             return []
 
+        search_project = project or "default"
         query_vec = np.array([query_emb]).astype("float32")
         faiss.normalize_L2(query_vec)
 
-        k = min(limit, self.index.ntotal)
+        # Use a larger k for post-filtering to ensure we hit the limit after filtering
+        k = min(limit * 10, self.index.ntotal)
         if k <= 0:
             return []
 
         similarities, indices = self.index.search(query_vec, k)
 
         results = []
-        seen_keys = set()
+        project_prefix = f"{search_project}:"
+        
         for i, idx in enumerate(indices[0]):
             if idx == -1:
                 continue
-            full_key = self.id_to_name.get(idx)
-            if full_key and full_key not in seen_keys:
-                # full_key is project:name
-                parts = full_key.split(":", 1)
-                project = parts[0]
-                name = parts[1]
-                
+            
+            full_key = self.id_to_name.get(int(idx))
+            if full_key and full_key.startswith(project_prefix):
+                name_part = full_key.split(":", 1)[1]
                 results.append({
-                    "name": name,
-                    "project": project,
+                    "name": name_part,
+                    "project": search_project,
                     "similarity": float(similarities[0][i])
                 })
-                seen_keys.add(full_key)
+                
+            if len(results) >= limit:
+                break
+                
         return results
 
 

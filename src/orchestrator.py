@@ -241,7 +241,12 @@ async def do_search_async(
     # 1. Fetch more candidates than requested for re-ranking (limit * 3)
     # Note: passing project to vector_manager for future-proofing internal filtering
     initial_results = await sqlite_storage.find_similar_functions(
-        query_emb, query_text=query, limit=limit * 3, language=language, project=project
+        query_emb,
+        query_text=query,
+        limit=limit * 3,
+        language=language,
+        project=project,
+        include_code=False,
     )
 
     # 2. Re-rank using LLM

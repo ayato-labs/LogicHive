@@ -48,40 +48,64 @@ class FakeLogicIntelligence:
         return {"description": "Automated description", "tags": ["auto"]}
 
     async def _call_llm_async(self, prompt: str, use_json: bool = False):
-        """Simulates internal LLM calls used by plugins."""
-        if "break" in prompt.lower():
+        """
+        Simulates internal LLM calls used by plugins/consolidation.
+        Uses keywords in prompt to trigger specific deterministic behaviors.
+        """
+        prompt_lower = prompt.lower()
+        if "syntax error" in prompt_lower or "not runnable" in prompt_lower:
+            return {"score": 0, "reason": "Fake: Detected syntax errors"}
+        if "injection" in prompt_lower or "<script>" in prompt_lower:
+            return {"score": 0, "reason": "Fake: Potential injection attempt blocked"}
+        
+        if "break" in prompt_lower:
             return None
-        if "fail" in prompt.lower():
+        if "fail" in prompt_lower:
             return {}
-        # Success response
-        return {
-            "name": "fake_func",
-            "code": "def fake_func(): pass",
-            "description": "A fake function generated for testing",
-            "tags": ["fake"],
-            "dependencies": []
-        }
+            
+        # Success response (Default)
+        if use_json:
+            return {
+                "name": "fake_func",
+                "code": "def fake_func(): pass",
+                "description": "A fake function generated for testing",
+                "tags": ["fake"],
+                "dependencies": [],
+                "score": 95,
+                "reason": "Fake: High quality code"
+            }
+        return "TECHNICAL_QUERY_EXPANSION"
 
 
-def pytest_sessionstart(session):
+def pytest_configure(config):
+    """Register custom markers."""
+    config.addinivalue_line("markers", "use_real_intelligence: marker to skip the automatic patching of LogicIntelligence with FakeLogicIntelligence")
+
+@pytest.fixture(autouse=True)
+def intelligence_isolation(request):
     """
-    Applied exactly once BEFORE any tests or module imports happen.
-    Ensures absolute isolation and consistent mocking.
-    Standard suite ALWAYS uses Fakes to ensure speed and stability.
+    Autouse fixture that patches LogicIntelligence with its Fake implementation by default.
+    Specific unit tests can opt-out using @pytest.mark.use_real_intelligence.
     """
-    import core.config
-    core.config.QUALITY_GATE_THRESHOLD = 60
+    if "use_real_intelligence" in request.keywords:
+        yield
+        return
 
-    # We patch the Class itself at the source to ensure ALL instances are Fakes
-    # Standard practice for professional CI/CD: Tests must not depend on network/quotas.
     patches = [
         patch("core.consolidation.LogicIntelligence", new=FakeLogicIntelligence),
         patch("orchestrator.LogicIntelligence", new=FakeLogicIntelligence),
         patch("core.plugins.draft_generator.LogicIntelligence", new=FakeLogicIntelligence),
         patch("core.evaluation.plugins.ai.LogicIntelligence", new=FakeLogicIntelligence),
     ]
+    
+    started_patches = []
     for p in patches:
-        p.start()
+        started_patches.append(p.start())
+    
+    yield
+    
+    for p in patches:
+        p.stop()
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -108,14 +132,12 @@ def mock_intel():
 
 @pytest.fixture
 async def test_db():
-    """Fixtures that ensures a clean database FOR EACH TEST."""
     from storage.init_db import init_db
     db_path = os.environ.get("SQLITE_DB_PATH", "test_logichive.db")
-    if os.path.exists(db_path):
-        os.remove(db_path)
-
+    # File removal is now handled in clear_cache autouse fixture for reliability
     await init_db()
     yield
+    # No cleanup here; let the next test handle it or clear_cache handle it
 
 
 @pytest.fixture(autouse=True)
@@ -133,10 +155,17 @@ async def clear_cache():
     vector_manager._initialized = True
     
     # Also remove physical index files if they exist to prevent cross-contamination
-    for f in [os.environ.get("FAISS_INDEX_PATH"), os.environ.get("FAISS_MAPPING_PATH")]:
+    for f in [os.environ.get("FAISS_INDEX_PATH"), os.environ.get("FAISS_MAPPING_PATH"), os.environ.get("SQLITE_DB_PATH")]:
         if f and os.path.exists(f):
             try:
-                os.remove(f)
+                # On Windows, we might need multiple attempts if the file is being closed
+                import time
+                for _ in range(3):
+                    try:
+                        os.remove(f)
+                        break
+                    except PermissionError:
+                        time.sleep(0.1)
             except:
                 pass
     yield
