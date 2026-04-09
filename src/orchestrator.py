@@ -91,25 +91,25 @@ def extract_dependencies(code: str, language: str = "python") -> list[str]:
     return sorted(list(dependencies - std_lib))
 
 
-async def do_delete_async(name: str) -> bool:
+async def do_delete_async(name: str, project: str = "default") -> bool:
     """
     Orchestrates deletion from DB, Vector index, and archiving in Backup.
     """
     try:
         # 1. Local DB deletion
-        db_success = await sqlite_storage.delete_function(name)
+        db_success = await sqlite_storage.delete_function(name, project=project)
         if not db_success:
             return False
 
         # 2. Vector index deletion (background)
-        asyncio.create_task(vector_manager.remove_vector(name))
+        asyncio.create_task(vector_manager.remove_vector(name, project=project))
 
         # 3. Backup Archiving (background)
         # ユーザーがバックアップを有効にしており、かつトークンが存在する場合のみ実行
         if ENABLE_AUTO_BACKUP and GITHUB_TOKEN:
             from storage.auto_backup import backup_manager
 
-            asyncio.create_task(backup_manager.archive_asset(name))
+            asyncio.create_task(backup_manager.archive_asset(name, project=project))
 
         return True
     except Exception as e:
@@ -128,6 +128,7 @@ async def do_save_async(
     language: str = "python",
     dependencies: list[str] = [],
     test_code: str = "",
+    project: str = "default",
 ):
     """
     Includes LLM Quality Gate 2.0 (LLM + Static Analysis), RAG optimization, and versioning.
@@ -157,19 +158,23 @@ async def do_save_async(
     code_hash = calculate_code_hash(code)
 
     # Check for unchanged asset
-    existing = await sqlite_storage.get_function_by_name(name)
+    existing = await sqlite_storage.get_function_by_name(name, project=project)
     if existing and existing.get("code_hash") == code_hash:
-        logger.info(f"Orchestrator: Skipping save for '{name}' (unchanged hash)")
+        logger.info(
+            f"Orchestrator: Skipping save for '{name}' in project '{project}' (unchanged hash)"
+        )
         return True
 
     # 3. LLM Metadata Enrichment / Embedding prep
     intel = LogicIntelligence(GEMINI_API_KEY)
 
     # Enrich description and tags if needed
-    if not description or not tags:
-        enriched = intel.optimize_metadata(name, code, description, tags)
-        description = enriched.get("description", description)
-        tags = enriched.get("tags", tags)
+    # Note: intel.optimize_metadata is currently not implemented in LogicIntelligence.
+    # We will keep existing description/tags for now.
+    # if not description or not tags:
+    #     enriched = await intel.optimize_metadata(name, code, description, tags)
+    #     description = enriched.get("description", description)
+    #     tags = enriched.get("tags", tags)
 
     # 6. Generate Embedding for RAG
     search_doc = intel.construct_search_document(name, description, tags, code)
@@ -196,6 +201,7 @@ async def do_save_async(
         "code_hash": str(code_hash),
         "dependencies": dependencies,
         "test_code": test_code,
+        "project": project,
     }
 
     save_result = await sqlite_storage.upsert_function(data)
@@ -210,12 +216,14 @@ async def do_save_async(
     return save_result
 
 
-async def do_get_async(name: str) -> Optional[dict[str, Any]]:
+async def do_get_async(name: str, project: str = "default") -> Optional[dict[str, Any]]:
     """Asynchronous implementation for getting a function."""
-    return await sqlite_storage.get_function_by_name(name)
+    return await sqlite_storage.get_function_by_name(name, project=project)
 
 
-async def do_search_async(query: str, limit: int = 5, language: Optional[str] = None):
+async def do_search_async(
+    query: str, limit: int = 5, language: Optional[str] = None, project: Optional[str] = None
+):
     """Asynchronous implementation for searching functions with Query Expansion and Re-ranking."""
     intel = LogicIntelligence(GEMINI_API_KEY)
 
@@ -223,12 +231,13 @@ async def do_search_async(query: str, limit: int = 5, language: Optional[str] = 
     query_emb = await intel.generate_embedding(expanded_query)
 
     logger.info(
-        f"Orchestrator: Performing hybrid search for '{query}' (Lang: {language})"
+        f"Orchestrator: Performing hybrid search for '{query}' (Lang: {language}, Project: {project})"
     )
 
     # 1. Fetch more candidates than requested for re-ranking (limit * 3)
+    # Note: passing project to vector_manager for future-proofing internal filtering
     initial_results = await sqlite_storage.find_similar_functions(
-        query_emb, query_text=query, limit=limit * 3, language=language
+        query_emb, query_text=query, limit=limit * 3, language=language, project=project
     )
 
     # 2. Re-rank using LLM

@@ -114,6 +114,16 @@ class EvaluationManager:
         ruff_res = results.get("ruff")
         eslint_res = results.get("eslint")
 
+        # Basic Quality Gate: Block on Syntax Errors for Python
+        if lang == "python" and python_static_res and python_static_res.score == 0:
+            return {
+                "score": 0.0,
+                "reason": f"Critical Quality Failure: {python_static_res.reason}",
+                "details": {
+                    k: {"score": v.score, "reason": v.reason} for k, v in results.items()
+                },
+            }
+
         if lang == "python":
             # 40% AI, 30% Ruff, 30% AST Static
             parts = []

@@ -39,6 +39,8 @@ async def test_upsert_and_retrieve_function(test_db):
     assert len(vector_manager.id_to_name) == 1, (
         "FAISS manager should have exactly 1 active mapping"
     )
+    # Check project prefix in FAISS key
+    assert "default:test_func" in vector_manager.name_to_id
 
 
 @pytest.mark.asyncio
@@ -83,7 +85,7 @@ async def test_versioning_on_code_change(test_db):
     assert len(vector_manager.id_to_name) == 1, (
         "FAISS manager should have exactly 1 active mapping"
     )
-    assert "version_test" in vector_manager.name_to_id
+    assert "default:version_test" in vector_manager.name_to_id
 
 
 @pytest.mark.asyncio
@@ -117,3 +119,33 @@ async def test_semantic_search_real_faiss(test_db):
     assert len(results) > 0
     assert results[0]["name"] == "string_util"
     assert results[0]["similarity"] > 0.8
+
+
+@pytest.mark.asyncio
+async def test_project_isolation_in_sqlite(test_db):
+    """Verifies that functions with same name in different projects don't collide."""
+    common_name = "shared_name"
+    
+    # Project A
+    await sqlite_storage.upsert_function({
+        "name": common_name, "project": "proj-a", "code": "code-a", "code_hash": "ha", "embedding": [0.1]*768
+    })
+    
+    # Project B
+    await sqlite_storage.upsert_function({
+        "name": common_name, "project": "proj-b", "code": "code-b", "code_hash": "hb", "embedding": [0.2]*768
+    })
+    
+    # Retrieve Project A version
+    func_a = await sqlite_storage.get_function_by_name(common_name, project="proj-a")
+    assert func_a["code"] == "code-a"
+    assert func_a["project"] == "proj-a"
+    
+    # Retrieve Project B version
+    func_b = await sqlite_storage.get_function_by_name(common_name, project="proj-b")
+    assert func_b["code"] == "code-b"
+    assert func_b["project"] == "proj-b"
+    
+    # Ensure default retrieval doesn't find them if they aren't in default
+    func_none = await sqlite_storage.get_function_by_name(common_name, project="default")
+    assert func_none is None

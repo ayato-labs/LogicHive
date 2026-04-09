@@ -31,7 +31,7 @@ uv pip install -e .
 ### 3. MCPの登録（自動設定）
 プロジェクト内の `scripts/register_mcp.bat` を実行してください。以下の設定が試行されます。
 
-- **対応エージェント**: Gemini CLI, Antigravity, Cursor, Cloud Code, VS Code (Generic)
+- **対応エージェント**: Gemini CLI, Antigravity, Cursor, Cloude Code
 - **指示の自動注入**: `~/.gemini/GEMINI.md` 等へ「LogicHiveを活用する」というルールを追記します。
 
 ### 3. システムの起動

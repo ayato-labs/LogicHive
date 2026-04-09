@@ -98,24 +98,19 @@ class RuffEvaluator(BaseEvaluator):
         if language.lower() != "python":
             return EvaluationResult(score=100.0, reason="Skipped (Not Python).")
 
-        with tempfile.NamedTemporaryFile(
-            suffix=".py", delete=False, mode="w", encoding="utf-8"
-        ) as tmp:
-            tmp_path = tmp.name
-            tmp.write(code)
-
         try:
-            # Run ruff check --format json
+            # Use subprocess to run ruff check on stdin
             process = await asyncio.create_subprocess_exec(
                 "ruff",
                 "check",
-                "--format",
+                "--output-format",
                 "json",
-                tmp_path,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                "-",
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await process.communicate()
+            stdout, stderr = await process.communicate(input=code.encode())
 
             if process.returncode not in [0, 1]:  # Ruff returns 1 if it finds issues
                 # Check if ruff is installed/callable
@@ -148,9 +143,6 @@ class RuffEvaluator(BaseEvaluator):
         except Exception as e:
             logger.error(f"RuffEvaluator Error: {e}")
             return EvaluationResult(score=100.0, reason=f"Ruff check failed: {e}")
-        finally:
-            if os.path.exists(tmp_path):
-                os.remove(tmp_path)
 
 
 class ESLintEvaluator(BaseEvaluator):

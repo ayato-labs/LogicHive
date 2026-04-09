@@ -165,12 +165,14 @@ class AutoBackupManager:
         Exports the asset (code and metadata) to the exports/ directory.
         """
         name = data.get("name", "unknown")
+        project = data.get("project", "default")
         language = data.get("language", "text")
         code = data.get("code", "")
 
-        # 1. Create directory structure
-        func_dir = os.path.join(self.export_dir, "functions", language.lower())
-        meta_dir = os.path.join(self.export_dir, "metadata")
+        # 1. Create directory structure: exports/projects/{project}/...
+        project_dir = os.path.join(self.export_dir, "projects", project)
+        func_dir = os.path.join(project_dir, "functions", language.lower())
+        meta_dir = os.path.join(project_dir, "metadata")
         os.makedirs(func_dir, exist_ok=True)
         os.makedirs(meta_dir, exist_ok=True)
 
@@ -186,7 +188,7 @@ class AutoBackupManager:
         with open(meta_path, "w", encoding="utf-8") as f:
             json.dump(meta_data, f, indent=4, ensure_ascii=False)
 
-        logger.debug(f"AutoBackup: Exported '{name}' to {self.export_dir}")
+        logger.debug(f"AutoBackup: Exported '{name}' in project '{project}' to {self.export_dir}")
 
     async def bulk_sync_to_git(self) -> None:
         """
@@ -266,35 +268,48 @@ class AutoBackupManager:
             if pull_res.returncode != 0:
                 logger.warning(f"AutoBackup: Pull failed: {pull_res.stderr}")
 
-            # 2. Iterate metadata JSONs
-            meta_dir = os.path.join(self.export_dir, "metadata")
-            if not os.path.exists(meta_dir):
+            # 2. Iterate metadata JSONs in all project subdirectories
+            projects_root = os.path.join(self.export_dir, "projects")
+            if not os.path.exists(projects_root):
                 return []
 
-            for filename in os.listdir(meta_dir):
-                if not filename.endswith(".json"):
+            for project in os.listdir(projects_root):
+                project_path = os.path.join(projects_root, project)
+                if not os.path.isdir(project_path):
+                    continue
+                
+                meta_dir = os.path.join(project_path, "metadata")
+                if not os.path.exists(meta_dir):
                     continue
 
-                try:
-                    meta_path = os.path.join(meta_dir, filename)
-                    with open(meta_path, "r", encoding="utf-8") as f:
-                        meta_data = json.load(f)
+                for filename in os.listdir(meta_dir):
+                    if not filename.endswith(".json"):
+                        continue
 
-                    name = meta_data.get("name")
-                    lang = meta_data.get("language", "python")
-                    ext = self._get_extension(lang)
+                    try:
+                        meta_path = os.path.join(meta_dir, filename)
+                        with open(meta_path, "r", encoding="utf-8") as f:
+                            meta_data = json.load(f)
 
-                    # Read source code if available
-                    code_path = os.path.join(
-                        self.export_dir, "functions", lang.lower(), f"{name}.{ext}"
-                    )
-                    if os.path.exists(code_path):
-                        with open(code_path, "r", encoding="utf-8") as f:
-                            meta_data["code"] = f.read()
+                        name = meta_data.get("name")
+                        lang = meta_data.get("language", "python")
+                        # Ensure project is set in metadata if missing
+                        if "project" not in meta_data:
+                            meta_data["project"] = project
 
-                    assets.append(meta_data)
-                except Exception as e:
-                    logger.error(f"AutoBackup: Failed to read '{filename}': {e}")
+                        ext = self._get_extension(lang)
+
+                        # Read source code if available
+                        code_path = os.path.join(
+                            project_path, "functions", lang.lower(), f"{name}.{ext}"
+                        )
+                        if os.path.exists(code_path):
+                            with open(code_path, "r", encoding="utf-8") as f:
+                                meta_data["code"] = f.read()
+
+                        assets.append(meta_data)
+                    except Exception as e:
+                        logger.error(f"AutoBackup: Failed to read '{filename}' in project '{project}': {e}")
 
         except Exception as e:
             logger.error(f"AutoBackup: Error listing backup assets: {e}")
@@ -326,7 +341,7 @@ class AutoBackupManager:
 
         return results
 
-    async def sync_to_git(self, name: str) -> None:
+    async def sync_to_git(self, name: str, project: str = "default") -> None:
         """
         Runs git commands in the exports/ directory to sync with the private backup repo.
         """
@@ -366,7 +381,7 @@ class AutoBackupManager:
                 "git",
                 "commit",
                 "-m",
-                f"backup: {name}",
+                f"backup: [{project}] {name}",
                 cwd=self.export_dir,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
@@ -388,13 +403,13 @@ class AutoBackupManager:
 
             if push_proc.returncode == 0:
                 logger.info(
-                    f"AutoBackup: Successfully backed up '{name}' to private repository."
+                    f"AutoBackup: Successfully backed up '{name}' ({project}) to private repository."
                 )
 
         except Exception as e:
-            logger.error(f"AutoBackup: Private Git sync failed for '{name}': {e}")
+            logger.error(f"AutoBackup: Private Git sync failed for '{name}' ({project}): {e}")
 
-    async def archive_asset(self, name: str) -> None:
+    async def archive_asset(self, name: str, project: str = "default") -> None:
         """
         Moves the asset files to an archives/ directory and syncs with Git.
         """
@@ -403,22 +418,15 @@ class AutoBackupManager:
             if not self._initialized_remote:
                 await self._initialize_remote_repo_api()
 
-            # 2. Identify files
+            # 2. Identify files within the project directory
             found_files = []
+            project_dir = os.path.join(self.export_dir, "projects", project)
+            
             # Check metadata
-            meta_path = os.path.join(self.export_dir, "metadata", f"{name}.json")
-            if os.path.exists(meta_path):
-                found_files.append(meta_path)
-
-            # Check functions (all possible extensions)
-            for ext in ["py", "js", "ts", "md", "txt"]:
-                # We don't know the exact lang without meta, so we check all common ones
-                # Better: read meta first if it exists
-                pass
-
-            # To be more efficient, we read the language from the meta before moving
+            meta_path = os.path.join(project_dir, "metadata", f"{name}.json")
             lang = "unknown"
             if os.path.exists(meta_path):
+                found_files.append(meta_path)
                 with open(meta_path, "r", encoding="utf-8") as f:
                     try:
                         meta = json.load(f)
@@ -428,22 +436,23 @@ class AutoBackupManager:
                             f"AutoBackup: Failed to read metadata for '{name}' at {meta_path}: {e}"
                         )
 
+            # Check functions
             ext = self._get_extension(lang)
             code_path = os.path.join(
-                self.export_dir, "functions", lang.lower(), f"{name}.{ext}"
+                project_dir, "functions", lang.lower(), f"{name}.{ext}"
             )
             if os.path.exists(code_path):
                 found_files.append(code_path)
 
             if not found_files:
-                logger.info(f"AutoBackup: No files found to archive for '{name}'.")
+                logger.info(f"AutoBackup: No files found to archive for '{name}' in project '{project}'.")
                 return
 
-            # 3. Move to archives directory
+            # 3. Move to archives directory (keeping project context)
             import datetime
 
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            archive_base = os.path.join(self.export_dir, "archives", timestamp, name)
+            archive_base = os.path.join(self.export_dir, "archives", timestamp, project, name)
             os.makedirs(archive_base, exist_ok=True)
 
             for fpath in found_files:
@@ -460,7 +469,7 @@ class AutoBackupManager:
                 "git",
                 "commit",
                 "-m",
-                f"archive: {name}",
+                f"archive: [{project}] {name}",
                 cwd=self.export_dir,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
@@ -472,10 +481,10 @@ class AutoBackupManager:
                     "git", "push", "origin", "main", cwd=self.export_dir
                 )
             ).wait()
-            logger.info(f"AutoBackup: Successfully archived '{name}' to Git.")
+            logger.info(f"AutoBackup: Successfully archived '{name}' ({project}) to Git.")
 
         except Exception as e:
-            logger.error(f"AutoBackup: Archiving failed for '{name}': {e}")
+            logger.error(f"AutoBackup: Archiving failed for '{name}' ({project}): {e}")
 
     async def process_backup(self, data: dict[str, Any]) -> None:
         """
@@ -486,7 +495,7 @@ class AutoBackupManager:
 
         try:
             await self.export_asset(data)
-            await self.sync_to_git(data.get("name", "asset"))
+            await self.sync_to_git(data.get("name", "asset"), project=data.get("project", "default"))
         except Exception as e:
             logger.error(f"AutoBackup: Background backup process failed: {e}")
 

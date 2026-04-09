@@ -16,75 +16,90 @@ from storage.sqlite_api import vector_manager
 
 from unittest.mock import MagicMock, AsyncMock, patch
 
-# Global mock instances for session-wide access
-_SESSION_MOCK_INTEL = MagicMock()
-_SESSION_MOCK_EVAL = MagicMock()
+class FakeLogicIntelligence:
+    """
+    A deterministic fake for LogicIntelligence that avoids MagicMock.
+    Returns stable results for testing without external API calls.
+    """
+    def __init__(self, api_key="fake_key"):
+        self.api_key = api_key
+
+    async def generate_embedding(self, text: str):
+        # Deterministic dummy embedding: repeating a simple hash of the text
+        import hashlib
+        h = int(hashlib.md5(text.encode()).hexdigest(), 16)
+        val = (h % 1000) / 1000.0
+        return [val] * 768
+
+    async def evaluate_quality(self, code: str):
+        # Basic heuristic for "good" vs "bad" code for testing
+        if len(code) < 10 or "error" in code.lower():
+            return {"score": 10, "reason": "Fake: Code too short or contains 'error'"}
+        return {"score": 90, "reason": "Fake: Looks good"}
+
+    async def expand_query(self, query: str):
+        return query
+
+    async def rerank_results(self, query: str, results: list, limit: int = 5):
+        return results[:limit]
+
+    def construct_search_document(self, name: str, description: str, tags: list):
+        return f"{name} {description} {' '.join(tags)}"
+
+    def optimize_metadata(self, code: str):
+        return {"description": "Automated description", "tags": ["auto"]}
+
+    async def _call_llm_async(self, prompt: str, use_json: bool = False):
+        """Simulates internal LLM calls used by plugins."""
+        if "break" in prompt.lower():
+            return None
+        if "fail" in prompt.lower():
+            return {}
+        # Success response
+        return {
+            "name": "fake_func",
+            "code": "def fake_func(): pass",
+            "description": "A fake function generated for testing",
+            "tags": ["fake"],
+            "dependencies": []
+        }
 
 
 @pytest.fixture(scope="session", autouse=True)
 def global_mock_ai():
-    """Globally mocks AI components if GEMINI_API_KEY is missing, ensuring CI passes."""
+    """Globally replaces AI components with deterministic Fakes if GEMINI_API_KEY is missing."""
     if not os.environ.get("GEMINI_API_KEY"):
-        # Configure universal mock for LogicIntelligence
-        _SESSION_MOCK_INTEL.generate_embedding = AsyncMock(return_value=[0.1] * 768)
-        _SESSION_MOCK_INTEL.evaluate_quality = AsyncMock(
-            return_value={"score": 85, "reason": "Mocked pass"}
-        )
-        _SESSION_MOCK_INTEL.expand_query = AsyncMock(side_effect=lambda x: x)
-        _SESSION_MOCK_INTEL.rerank_results = AsyncMock(
-            side_effect=lambda q, res, limit: res[:limit]
-        )
-        _SESSION_MOCK_INTEL.optimize_metadata = MagicMock(
-            return_value={"description": "Mocked technical desc", "tags": ["mock"]}
-        )
-        _SESSION_MOCK_INTEL.construct_search_document = MagicMock(
-            return_value="search doc"
-        )
-
-        # Configure universal mock for EvaluationManager
-        # Smarter mock for EvaluationManager to support quality gate rejections in tests
-        async def mock_evaluate_all(code, language, **kwargs):
-            # Instant rejection for obvious syntax errors (unbalanced brackets/tags)
-            if (
-                code.count("(") != code.count(")")
-                or code.count("{") != code.count("}")
-                or code.count("<") != code.count(">")
-            ):
-                from core.exceptions import ValidationError
-
-                raise ValidationError(f"Mocked syntax error rejection ({language})")
-            return {"score": 85.0, "reason": "Mocked validation pass", "details": {}}
-
-        _SESSION_MOCK_EVAL.evaluate_all = AsyncMock(side_effect=mock_evaluate_all)
-
-        # Patch multiple potential import paths using SAME instances
+        # We patch the Class itself to return a FakeLogicIntelligence instance
+        # This is NOT MagicMock, it's a manual Fake fulfilling the user rule.
         patches = [
-            patch("orchestrator.LogicIntelligence", return_value=_SESSION_MOCK_INTEL),
-            patch("orchestrator.EvaluationManager", return_value=_SESSION_MOCK_EVAL),
-            patch(
-                "core.consolidation.LogicIntelligence", return_value=_SESSION_MOCK_INTEL
-            ),
-            patch(
-                "core.evaluation.manager.EvaluationManager",
-                return_value=_SESSION_MOCK_EVAL,
-            ),
+            patch("storage.sqlite_api.LogicIntelligence", side_effect=lambda *args, **kwargs: FakeLogicIntelligence()),
+            patch("orchestrator.LogicIntelligence", side_effect=lambda *args, **kwargs: FakeLogicIntelligence()),
+            patch("core.plugins.draft_generator.LogicIntelligence", side_effect=lambda *args, **kwargs: FakeLogicIntelligence()),
+            patch("core.evaluation.plugins.ai.LogicIntelligence", side_effect=lambda *args, **kwargs: FakeLogicIntelligence()),
         ]
 
         for p in patches:
             p.start()
-
         yield
-
         for p in patches:
             p.stop()
     else:
         yield
 
+@pytest.fixture
+def fake_intel():
+    """Provides a deterministic FakeLogicIntelligence instance."""
+    return FakeLogicIntelligence()
+
 
 @pytest.fixture
 def mock_intel():
-    """Provides the SAME session-scoped mock instance for call tracking in tests."""
-    return _SESSION_MOCK_INTEL
+    """Provides a fresh MagicMock instance for integration tests (permits call tracking)."""
+    from unittest.mock import MagicMock, AsyncMock
+    mock = MagicMock()
+    mock.generate_embedding = AsyncMock(return_value=[0.1] * 768)
+    mock.evaluate_quality = AsyncMock(return_value={"score": 85, "reason": "Mocked pass"})
+    return mock
 
 
 @pytest.fixture

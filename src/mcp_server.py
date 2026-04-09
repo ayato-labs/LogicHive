@@ -8,7 +8,9 @@ mcp = FastMCP("LogicHive")
 
 
 @mcp.tool()
-async def search_functions(query: str, limit: int = 5, language: str = None) -> str:
+async def search_functions(
+    query: str, limit: int = 5, language: str = None, project: str = None
+) -> str:
     """
     Search for high-quality, reusable code functions within the LogicHive vault using Hybrid Search.
     This is the primary tool for knowledge retrieval. Use it when you need to find existing
@@ -19,13 +21,17 @@ async def search_functions(query: str, limit: int = 5, language: str = None) -> 
     2. Exact Match: Function names (e.g., "normalize_llm_args").
     3. Tag Filter: Use "#tagname" (e.g., "#security").
     4. Language Filter: Specify the language (e.g., "python", "javascript") to restrict results.
+    5. Project Filter: Restrict search to a specific project (e.g., "ayato-studio").
 
     Args:
         query: Search term, exact name, or #tag.
         limit: Max results. Default 5.
         language: Optional language to filter by (e.g., 'python', 'javascript').
+        project: Optional project name to narrow the search.
     """
-    results = await orchestrator.do_search_async(query, limit, language)
+    results = await orchestrator.do_search_async(
+        query, limit, language, project=project
+    )
     if not results:
         return "No matching functions found."
 
@@ -50,15 +56,16 @@ async def search_functions(query: str, limit: int = 5, language: str = None) -> 
 
 
 @mcp.tool()
-async def get_function(name: str) -> str:
+async def get_function(name: str, project: str = "default") -> str:
     """
-    Fetch the full source code and metadata of a specific function by its exact name.
+    Fetch the full source code and metadata of a specific function by its exact name and project.
     Use this AFTER search_functions if you've identified a promising candidate name.
 
     Args:
         name: The precise, case-sensitive name of the function (e.g., "save_log").
+        project: The project namespace (defaults to 'default').
     """
-    f_data = await orchestrator.do_get_async(name)
+    f_data = await orchestrator.do_get_async(name, project=project)
     if not f_data:
         return f"Function '{name}' not found"
 
@@ -80,19 +87,20 @@ async def save_function(
     tags: list = [],
     dependencies: list[str] = [],
     test_code: str = "",
+    project: str = "default",
 ) -> str:
     """
     Saves a verified, high-quality code asset to the LogicHive vault for future reuse.
     The asset undergoes an automated Quality Gate check (AI grading & Static analysis).
 
     BEST PRACTICES FOR AI AGENTS:
-    1. Metadata is Critical: Provide a detailed 'description' (min 10 chars) explaining
-       the "why" and "how".
-    2. Taxonomize: Use relevant 'tags' to ensure future discoverability.
-    3. Self-Test: Always include 'test_code' if possible to increase reliability score.
+    1. Project Context: Always specify a 'project' name to avoid cluttering the global vault.
+    2. Metadata is Critical: Provide a detailed 'description' (min 10 chars).
+    3. Taxonomize: Use relevant 'tags' to ensure future discoverability.
+    4. Self-Test: Always include 'test_code' if possible to increase reliability score.
 
     REJECTION CRITERIA:
-    - Syntax errors (instant Score 0).
+    - Syntax errors (instant Score 0 / Critical failure).
     - Vague descriptions or missing tags.
     - Poor AI-graded quality (logic flaws, security risks).
 
@@ -104,6 +112,7 @@ async def save_function(
         tags: Categorization labels for discovery.
         dependencies: External libraries required (e.g., ['pandas', 'pydantic']).
         test_code: Pytest/Unit test code for automated validation.
+        project: Project name for logically grouping code (defaults to 'default').
     """
     try:
         success = await do_save_async(
@@ -114,6 +123,7 @@ async def save_function(
             language=language,
             dependencies=dependencies,
             test_code=test_code,
+            project=project,
         )
         return (
             "Saved successfully to LogicHive" if success else "Failed (Unknown Error)"
@@ -154,19 +164,20 @@ async def debug_db() -> str:
 
 
 @mcp.tool()
-async def delete_function(name: str) -> str:
+async def delete_function(name: str, project: str = "default") -> str:
     """
-    Deletes a function from the LogicHive vault.
+    Deletes a function from the LogicHive vault for a specific project.
     The function is archived in the backup repository for safety.
 
     Args:
         name: The case-sensitive name of the function to delete.
+        project: The project namespace (defaults to 'default').
     """
-    success = await do_delete_async(name)
+    success = await do_delete_async(name, project=project)
     if success:
-        return f"Successfully deleted and archived function '{name}'."
+        return f"Successfully deleted and archived function '{name}' in project '{project}'."
     else:
-        return f"Failed to delete function '{name}'."
+        return f"Failed to delete function '{name}' in project '{project}'."
 
 
 if __name__ == "__main__":

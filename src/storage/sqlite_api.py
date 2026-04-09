@@ -57,10 +57,13 @@ class SqliteStorage:
             db = await get_db_connection()
             db.row_factory = aiosqlite.Row
 
-            # 1. Check if name exists to handle versioning
+            project = function_data.get("project", "default")
+            name = function_data["name"]
+
+            # 1. Check if name exists in specific project to handle versioning
             async with db.execute(
-                "SELECT id, code, code_hash, version FROM logichive_functions WHERE name = ?",
-                (function_data["name"],),
+                "SELECT id, code, code_hash, version FROM logichive_functions WHERE project = ? AND name = ?",
+                (project, name),
             ) as cursor:
                 row = await cursor.fetchone()
                 existing = dict(row) if row else None
@@ -75,8 +78,8 @@ class SqliteStorage:
 
                     # Get full details of existing to archive
                     async with db.execute(
-                        "SELECT * FROM logichive_functions WHERE name = ?",
-                        (function_data["name"],),
+                        "SELECT * FROM logichive_functions WHERE project = ? AND name = ?",
+                        (project, name),
                     ) as cursor:
                         full_existing_row = await cursor.fetchone()
 
@@ -91,7 +94,8 @@ class SqliteStorage:
 
             data = (
                 existing["id"] if existing else row_id,
-                function_data["name"],
+                project,
+                name,
                 function_data["code"],
                 function_data.get("description", ""),
                 function_data.get("language", "python"),
@@ -110,8 +114,8 @@ class SqliteStorage:
             await db.execute(
                 """
                 INSERT OR REPLACE INTO logichive_functions 
-                (id, name, code, description, language, tags, reliability_score, test_metrics, embedding, code_hash, version, dependencies, test_code)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (id, project, name, code, description, language, tags, reliability_score, test_metrics, embedding, code_hash, version, dependencies, test_code)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 data,
             )
@@ -122,11 +126,11 @@ class SqliteStorage:
             # Incremental FAISS update
             if "embedding" in function_data:
                 await vector_manager.add_vector(
-                    function_data["name"], function_data["embedding"]
+                    name, function_data["embedding"], project=project
                 )
 
             logger.info(
-                f"SQLite: Successfully saved version {new_version} of function '{function_data['name']}'"
+                f"SQLite: Successfully saved version {new_version} of function '{name}' in project '{project}'"
             )
             return True
         except Exception as e:
@@ -148,19 +152,24 @@ class SqliteStorage:
             logger.error(f"SQLite: Failed to list all functions: {e}")
             return []
 
-    async def delete_function(self, name: str) -> bool:
+    async def delete_function(self, name: str, project: str = "default") -> bool:
         """
-        Deletes a function from the database by name.
+        Deletes a function from the database by project and name.
         """
         try:
             db = await get_db_connection()
-            await db.execute("DELETE FROM logichive_functions WHERE name = ?", (name,))
+            await db.execute(
+                "DELETE FROM logichive_functions WHERE project = ? AND name = ?",
+                (project, name),
+            )
             await db.commit()
             await db.close()
-            logger.info(f"SQLite: Function '{name}' deleted.")
+            logger.info(f"SQLite: Function '{name}' in project '{project}' deleted.")
             return True
         except Exception as e:
-            logger.error(f"SQLite: Failed to delete function '{name}': {e}")
+            logger.error(
+                f"SQLite: Failed to delete function '{name}' in project '{project}': {e}"
+            )
             return False
 
     async def find_similar_functions(
@@ -169,6 +178,7 @@ class SqliteStorage:
         query_text: Optional[str] = None,
         tags: Optional[List[str]] = None,
         language: Optional[str] = None,
+        project: Optional[str] = None,
         limit: int = 5,
         match_threshold: float = 0.1,
     ) -> List[Dict[str, Any]]:
@@ -180,6 +190,7 @@ class SqliteStorage:
             query_text: Optional text for keyword/name/description matching.
             tags: Optional list of tags for strict filtering.
             language: Optional language for strict filtering (e.g., "python").
+            project: Optional project for filtering results.
             limit: Maximum results to return.
             match_threshold: Minimum similarity score for vector results.
         """
@@ -259,6 +270,11 @@ class SqliteStorage:
                     conditions.append("LOWER(language) = LOWER(?)")
                     params.append(language)
 
+                # Project Strict Match
+                if project:
+                    conditions.append("project = ?")
+                    params.append(project)
+
                 if conditions:
                     where_clause = " AND ".join(conditions)
                     sql = f"SELECT * FROM logichive_functions WHERE {where_clause} LIMIT {limit * 3}"
@@ -290,25 +306,43 @@ class SqliteStorage:
             names_to_hydrate = []
             similarities = {}
 
-            for name, similarity in vector_matches:
-                if name in final_results:
+            for match in vector_matches:
+                v_name = match["name"]
+                v_project = match["project"]
+                similarity = match["similarity"]
+
+                # If project was specified, filter at this stage too
+                if project and v_project != project:
+                    continue
+
+                if v_name in final_results and final_results[v_name].get("project") == v_project:
                     # If already in SQL results, combine scores
-                    final_results[name]["similarity"] = max(
-                        final_results[name]["similarity"], similarity
+                    final_results[v_name]["similarity"] = max(
+                        final_results[v_name]["similarity"], similarity
                     )
                 elif similarity >= match_threshold:
-                    names_to_hydrate.append(name)
-                    similarities[name] = similarity
+                    names_to_hydrate.append(v_name)
+                    similarities[v_name] = similarity
 
             if names_to_hydrate:
                 placeholders = ", ".join(["?"] * len(names_to_hydrate))
-                # Apply language filter even to hydrated results if specified
-                lang_clause = "AND LOWER(language) = LOWER(?)" if language else ""
-                sql = f"SELECT * FROM logichive_functions WHERE name IN ({placeholders}) {lang_clause}"
+                # Apply language and project filter even to hydrated results if specified
+                extra_conditions = []
+                if language:
+                    extra_conditions.append("LOWER(language) = LOWER(?)")
+                if project:
+                    extra_conditions.append("project = ?")
+
+                where_clause = (
+                    f"AND {' AND '.join(extra_conditions)}" if extra_conditions else ""
+                )
+                sql = f"SELECT * FROM logichive_functions WHERE name IN ({placeholders}) {where_clause}"
 
                 query_params = names_to_hydrate.copy()
                 if language:
                     query_params.append(language)
+                if project:
+                    query_params.append(project)
 
                 async with db.execute(sql, query_params) as cursor:
                     db_rows = await cursor.fetchall()
@@ -355,21 +389,25 @@ class SqliteStorage:
 
         return processed
 
-    async def get_function_by_name(self, name: str) -> Optional[Dict[str, Any]]:
+    async def get_function_by_name(
+        self, name: str, project: str = "default"
+    ) -> Optional[Dict[str, Any]]:
         try:
             db = await get_db_connection()
             db.row_factory = lambda cursor, row: dict(
                 zip([col[0] for col in cursor.description], row)
             )
             async with db.execute(
-                "SELECT * FROM logichive_functions WHERE name = ?",
-                (name,),
+                "SELECT * FROM logichive_functions WHERE project = ? AND name = ?",
+                (project, name),
             ) as cursor:
                 row = await cursor.fetchone()
             await db.close()
             return self._process_row(row)
         except Exception as e:
-            logger.error(f"SQLite: Failed to get function '{name}': {e}")
+            logger.error(
+                f"SQLite: Failed to get function '{name}' in project '{project}': {e}"
+            )
             return None
 
     async def get_all_functions(self) -> List[Dict[str, Any]]:
@@ -388,19 +426,23 @@ class SqliteStorage:
 
     @retry_on_db_lock()
     @with_write_lock
-    async def increment_call_count(self, name: str) -> bool:
+    async def increment_call_count(self, name: str, project: str = "default") -> bool:
         try:
             db = await get_db_connection()
             await db.execute(
-                "UPDATE logichive_functions SET call_count = call_count + 1 WHERE name = ?",
-                (name,),
+                "UPDATE logichive_functions SET call_count = call_count + 1 WHERE project = ? AND name = ?",
+                (project, name),
             )
             await db.commit()
             await db.close()
             return True
         except Exception as e:
-            logger.error(f"SQLite: Increment failed for '{name}': {e}")
-            raise StorageError(f"Failed to increment call count for '{name}': {e}")
+            logger.error(
+                f"SQLite: Increment failed for '{name}' in project '{project}': {e}"
+            )
+            raise StorageError(
+                f"Failed to increment call count for '{name}' in project '{project}': {e}"
+            )
 
 
 # Singleton instance

@@ -60,15 +60,18 @@ class VectorIndexManager:
             embeddings = []
             names = []
             for row in db_rows:
-                if row.get("embedding"):
+                if "embedding" in row.keys() and row["embedding"]:
                     try:
                         vec = json.loads(row["embedding"])
+                        project = row["project"] if "project" in row.keys() else "default"
+                        name = row["name"]
+                        full_key = f"{project}:{name}"
                         if len(vec) == self.dimension:
                             embeddings.append(vec)
-                            names.append(row["name"])
+                            names.append(full_key)
                     except (json.JSONDecodeError, TypeError, KeyError) as e:
                         logger.warning(
-                            f"FAISS: Skipping row '{row.get('name', 'ID ' + str(row.get('id')))}' due to invalid embedding: {e}"
+                            f"FAISS: Skipping row due to invalid embedding: {e}"
                         )
                         continue
 
@@ -76,28 +79,29 @@ class VectorIndexManager:
                 embeddings_np = np.array(embeddings).astype("float32")
                 faiss.normalize_L2(embeddings_np)
                 self.index.add(embeddings_np)
-                for i, name in enumerate(names):
-                    self.id_to_name[i] = name
-                    self.name_to_id[name] = i
+                for i, full_key in enumerate(names):
+                    self.id_to_name[i] = full_key
+                    self.name_to_id[full_key] = i
                 self._current_id = len(names)
 
             self._initialized = True
             await self.save_to_disk()
             logger.info("FAISS: Rebuilt index from DB.")
 
-    async def add_vector(self, name: str, embedding: List[float]):
+    async def add_vector(self, name: str, embedding: List[float], project: str = "default"):
         async with self._lock:
+            full_key = f"{project}:{name}"
             # 1. Basic validation
             if len(embedding) != self.dimension:
                 logger.warning(
-                    f"FAISS: Dimension mismatch for '{name}'. Expected {self.dimension}, got {len(embedding)}"
+                    f"FAISS: Dimension mismatch for '{full_key}'. Expected {self.dimension}, got {len(embedding)}"
                 )
                 return
 
             needs_rebuild = False
-            if name in self.name_to_id:
+            if full_key in self.name_to_id:
                 # Mark as stale (ghost vector)
-                old_id = self.name_to_id[name]
+                old_id = self.name_to_id[full_key]
                 if old_id in self.id_to_name:
                     del self.id_to_name[old_id]
 
@@ -110,30 +114,31 @@ class VectorIndexManager:
 
             self.index.add(vec)
             new_id = self._current_id
-            self.id_to_name[new_id] = name
-            self.name_to_id[name] = new_id
+            self.id_to_name[new_id] = full_key
+            self.name_to_id[full_key] = new_id
             self._current_id += 1
             await self.save_to_disk()
 
             if needs_rebuild:
-                logger.info("FAISS: Ghost vectors exceeded threshold, rebuilding.")
+                logger.info(f"FAISS: Ghost vectors exceeded threshold for '{full_key}', rebuilding.")
                 await self._rebuild_internal()
 
-    async def remove_vector(self, name: str):
+    async def remove_vector(self, name: str, project: str = "default"):
         """Removes a vector's mapping. Does not directly delete from FAISS (bloat mitigated by rebuild)."""
         async with self._lock:
-            if name in self.name_to_id:
-                old_id = self.name_to_id[name]
+            full_key = f"{project}:{name}"
+            if full_key in self.name_to_id:
+                old_id = self.name_to_id[full_key]
                 if old_id in self.id_to_name:
                     del self.id_to_name[old_id]
-                del self.name_to_id[name]
+                del self.name_to_id[full_key]
 
                 await self.save_to_disk()
 
                 ghost_count = self.index.ntotal - len(self.id_to_name)
                 if ghost_count > FAISS_GHOST_REBUILD_THRESHOLD:
                     logger.info(
-                        "FAISS: Ghost vectors exceeded threshold during removal, rebuilding."
+                        f"FAISS: Ghost vectors exceeded threshold during removal of '{full_key}', rebuilding."
                     )
                     await self._rebuild_internal()
 
@@ -148,7 +153,7 @@ class VectorIndexManager:
         try:
             db = await get_db_connection()
             async with db.execute(
-                "SELECT name, embedding FROM logichive_functions WHERE embedding IS NOT NULL"
+                "SELECT project, name, embedding FROM logichive_functions WHERE embedding IS NOT NULL"
             ) as cursor:
                 rows = await cursor.fetchall()
             await db.close()
@@ -163,9 +168,12 @@ class VectorIndexManager:
             for row in rows:
                 try:
                     vec = json.loads(row["embedding"])
+                    project = row["project"] if "project" in row.keys() else "default"
+                    name = row["name"]
+                    full_key = f"{project}:{name}"
                     if len(vec) == self.dimension:
                         embeddings.append(vec)
-                        names.append(row["name"])
+                        names.append(full_key)
                 except (json.JSONDecodeError, TypeError, KeyError) as e:
                     logger.warning(f"FAISS: Skipping row due to invalid embedding: {e}")
                     continue
@@ -174,9 +182,9 @@ class VectorIndexManager:
                 embeddings_np = np.array(embeddings).astype("float32")
                 faiss.normalize_L2(embeddings_np)
                 self.index.add(embeddings_np)
-                for i, name in enumerate(names):
-                    self.id_to_name[i] = name
-                    self.name_to_id[name] = i
+                for i, full_key in enumerate(names):
+                    self.id_to_name[i] = full_key
+                    self.name_to_id[full_key] = i
                 self._current_id = len(names)
 
             await self.save_to_disk()
@@ -217,14 +225,23 @@ class VectorIndexManager:
         similarities, indices = self.index.search(query_vec, k)
 
         results = []
-        seen_names = set()
+        seen_keys = set()
         for i, idx in enumerate(indices[0]):
             if idx == -1:
                 continue
-            name = self.id_to_name.get(idx)
-            if name and name not in seen_names:
-                results.append((name, float(similarities[0][i])))
-                seen_names.add(name)
+            full_key = self.id_to_name.get(idx)
+            if full_key and full_key not in seen_keys:
+                # full_key is project:name
+                parts = full_key.split(":", 1)
+                project = parts[0]
+                name = parts[1]
+                
+                results.append({
+                    "name": name,
+                    "project": project,
+                    "similarity": float(similarities[0][i])
+                })
+                seen_keys.add(full_key)
         return results
 
 
