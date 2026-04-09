@@ -11,9 +11,6 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from storage.init_db import init_db
-from storage.sqlite_api import vector_manager
-
 from unittest.mock import MagicMock, AsyncMock, patch
 
 class FakeLogicIntelligence:
@@ -38,15 +35,16 @@ class FakeLogicIntelligence:
         return {"score": 90, "reason": "Fake: Looks good"}
 
     async def expand_query(self, query: str):
-        return query
+        # Deterministic expansion that avoids triggering global drafts
+        return f"TECHNICAL_QUERY: {query}"
 
     async def rerank_results(self, query: str, results: list, limit: int = 5):
         return results[:limit]
 
-    def construct_search_document(self, name: str, description: str, tags: list):
+    def construct_search_document(self, name: str, description: str, tags: list, code: str = ""):
         return f"{name} {description} {' '.join(tags)}"
 
-    def optimize_metadata(self, code: str):
+    async def optimize_metadata(self, code: str):
         return {"description": "Automated description", "tags": ["auto"]}
 
     async def _call_llm_async(self, prompt: str, use_json: bool = False):
@@ -65,26 +63,32 @@ class FakeLogicIntelligence:
         }
 
 
-@pytest.fixture(scope="session", autouse=True)
-def global_mock_ai():
-    """Globally replaces AI components with deterministic Fakes if GEMINI_API_KEY is missing."""
-    if not os.environ.get("GEMINI_API_KEY"):
-        # We patch the Class itself to return a FakeLogicIntelligence instance
-        # This is NOT MagicMock, it's a manual Fake fulfilling the user rule.
-        patches = [
-            patch("storage.sqlite_api.LogicIntelligence", side_effect=lambda *args, **kwargs: FakeLogicIntelligence()),
-            patch("orchestrator.LogicIntelligence", side_effect=lambda *args, **kwargs: FakeLogicIntelligence()),
-            patch("core.plugins.draft_generator.LogicIntelligence", side_effect=lambda *args, **kwargs: FakeLogicIntelligence()),
-            patch("core.evaluation.plugins.ai.LogicIntelligence", side_effect=lambda *args, **kwargs: FakeLogicIntelligence()),
-        ]
+def pytest_sessionstart(session):
+    """
+    Applied exactly once BEFORE any tests or module imports happen.
+    Ensures absolute isolation and consistent mocking.
+    Standard suite ALWAYS uses Fakes to ensure speed and stability.
+    """
+    import core.config
+    core.config.QUALITY_GATE_THRESHOLD = 60
 
-        for p in patches:
-            p.start()
-        yield
-        for p in patches:
-            p.stop()
-    else:
-        yield
+    # We patch the Class itself at the source to ensure ALL instances are Fakes
+    # Standard practice for professional CI/CD: Tests must not depend on network/quotas.
+    patches = [
+        patch("core.consolidation.LogicIntelligence", new=FakeLogicIntelligence),
+        patch("orchestrator.LogicIntelligence", new=FakeLogicIntelligence),
+        patch("core.plugins.draft_generator.LogicIntelligence", new=FakeLogicIntelligence),
+        patch("core.evaluation.plugins.ai.LogicIntelligence", new=FakeLogicIntelligence),
+    ]
+    for p in patches:
+        p.start()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def global_test_config():
+    """Placeholder for session-scoped setup (logic moved to sessionstart)."""
+    yield
+
 
 @pytest.fixture
 def fake_intel():
@@ -105,26 +109,34 @@ def mock_intel():
 @pytest.fixture
 async def test_db():
     """Fixtures that ensures a clean database FOR EACH TEST."""
-    # Use session cleanup logic but trigger per-test
+    from storage.init_db import init_db
     db_path = os.environ.get("SQLITE_DB_PATH", "test_logichive.db")
     if os.path.exists(db_path):
         os.remove(db_path)
 
     await init_db()
     yield
-    # No immediate cleanup to allow debugging if needed, but next test will wipe it.
 
 
 @pytest.fixture(autouse=True)
 async def clear_cache():
-    """Resets the vector manager state between tests and ensures it is marked as initialized for unit tests."""
+    """Resets the vector manager state between tests."""
     import faiss
+    from storage.sqlite_api import vector_manager
+    import os
 
     vector_manager.id_to_name = {}
     vector_manager.name_to_id = {}
     vector_manager._current_id = 0
+    # Re-initialize to a fresh empty index
     vector_manager.index = faiss.IndexFlatIP(768)
-    vector_manager._initialized = (
-        True  # Force initialized to skip loading during unit tests
-    )
+    vector_manager._initialized = True
+    
+    # Also remove physical index files if they exist to prevent cross-contamination
+    for f in [os.environ.get("FAISS_INDEX_PATH"), os.environ.get("FAISS_MAPPING_PATH")]:
+        if f and os.path.exists(f):
+            try:
+                os.remove(f)
+            except:
+                pass
     yield

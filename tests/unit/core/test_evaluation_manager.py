@@ -17,10 +17,16 @@ async def test_evaluation_manager_rejection(fake_intel):
 async def test_evaluation_manager_success(fake_intel):
     """Verifies that EvaluationManager passes good code with high score."""
     manager = EvaluationManager()
+    # Explicitly inject fake_intel into the AI evaluator to bypass patch timing issues
+    ai_eval = manager.get_evaluator("ai_gate")
+    if ai_eval:
+        ai_eval.intel = fake_intel
+        
     good_code = "def hello():\n    pass"
     result = await manager.evaluate_all(good_code, "python")
     assert result["score"] >= 80
     assert "structural" in result["details"]
+    assert "ai_gate" in result["details"]
 
 @pytest.mark.asyncio
 async def test_ai_gate_evaluator_isolated(fake_intel):

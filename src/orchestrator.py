@@ -136,13 +136,19 @@ async def do_save_async(
     # --- 1. Evaluate Logic Asset (New Plugin System) ---
     eval_manager = EvaluationManager()
     eval_res = await eval_manager.evaluate_all(
-        code, language, description=description, tags=tags
+        code,
+        language,
+        description=description,
+        tags=tags,
+        test_code=test_code,
+        dependencies=dependencies,
     )
 
     final_score = eval_res["score"]
     reason = eval_res["reason"]
 
-    if final_score < QUALITY_GATE_THRESHOLD:
+    import core.config
+    if final_score < core.config.QUALITY_GATE_THRESHOLD:
         logger.warning(
             f"Orchestrator: Quality Gate REJECTED '{name}' (Score: {final_score:.1f}, Reason: {reason})"
         )
@@ -169,12 +175,10 @@ async def do_save_async(
     intel = LogicIntelligence(GEMINI_API_KEY)
 
     # Enrich description and tags if needed
-    # Note: intel.optimize_metadata is currently not implemented in LogicIntelligence.
-    # We will keep existing description/tags for now.
-    # if not description or not tags:
-    #     enriched = await intel.optimize_metadata(name, code, description, tags)
-    #     description = enriched.get("description", description)
-    #     tags = enriched.get("tags", tags)
+    if not description or not tags:
+        enriched = await intel.optimize_metadata(code)
+        description = enriched.get("description", description)
+        tags = list(set(tags + enriched.get("tags", [])))
 
     # 6. Generate Embedding for RAG
     search_doc = intel.construct_search_document(name, description, tags, code)

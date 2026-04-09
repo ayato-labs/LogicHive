@@ -113,12 +113,23 @@ class EvaluationManager:
         python_static_res = results.get("python_static")
         ruff_res = results.get("ruff")
         eslint_res = results.get("eslint")
+        runtime_res = results.get("runtime")
 
-        # Basic Quality Gate: Block on Syntax Errors for Python
+        # 1. Basic Quality Gate: Block on Syntax Errors
         if lang == "python" and python_static_res and python_static_res.score == 0:
             return {
                 "score": 0.0,
-                "reason": f"Critical Quality Failure: {python_static_res.reason}",
+                "reason": f"Critical Quality Failure (Syntax): {python_static_res.reason}",
+                "details": {
+                    k: {"score": v.score, "reason": v.reason} for k, v in results.items()
+                },
+            }
+
+        # 2. Runtime Verification Gate: Block on failing tests (Logic Failure)
+        if runtime_res and runtime_res.score == 0:
+            return {
+                "score": 0.0,
+                "reason": f"Critical Quality Failure (Runtime): {runtime_res.reason}",
                 "details": {
                     k: {"score": v.score, "reason": v.reason} for k, v in results.items()
                 },

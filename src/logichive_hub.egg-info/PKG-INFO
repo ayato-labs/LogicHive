@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: logichive-hub
-Version: 0.1.0
+Version: 0.5.2
 Summary: LogicHive: Private Hub Backend
 Requires-Python: >=3.10
 License-File: LICENSE
@@ -24,4 +24,6 @@ Requires-Dist: mypy
 Requires-Dist: stripe
 Requires-Dist: streamlit
 Requires-Dist: pandas
+Requires-Dist: pyinstaller
+Requires-Dist: psutil
 Dynamic: license-file

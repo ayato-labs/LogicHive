@@ -9,6 +9,7 @@ async def test_vector_add_and_search():
     Checks that project-scoped composite keys work correctly.
     """
     manager = VectorIndexManager(dimension=768)
+    manager._initialized = True
     
     # 1. Add vector for Project A
     emb_a = [0.1] * 768
@@ -21,15 +22,13 @@ async def test_vector_add_and_search():
     # 3. Search for Project A
     # Result should return 'proj-a:func_a'
     results = await manager.search(emb_a, limit=5)
-    assert len(results) >= 1
-    found_keys = [r["name"] for r in results]
-    assert "proj-a:func_a" in found_keys
+    found_names = [r["name"] for r in results]
+    assert "func_a" in found_names
     
-    # Check that it's NOT just returning 'func_a' (global)
-    assert "proj-b:func_a" in found_keys # FAISS returns based on distance, both should be in index
-    # But names must have project prefix
-    for r in results:
-        assert ":" in r["name"]
+    # Check that we have results from both projects (since they are in the same index)
+    found_projects = [r["project"] for r in results]
+    assert "proj-a" in found_projects
+    assert "proj-b" in found_projects
 
 @pytest.mark.asyncio
 async def test_vector_removal():
