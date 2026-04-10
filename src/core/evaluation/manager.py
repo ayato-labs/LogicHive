@@ -113,66 +113,51 @@ class EvaluationManager:
         python_static_res = results.get("python_static")
         ruff_res = results.get("ruff")
         eslint_res = results.get("eslint")
+        runtime_res = results.get("runtime")
 
+        is_draft = "[AI_DRAFT]" in (kwargs.get("description", "") or "") or "[AI-DRAFT]" in (kwargs.get("description", "") or "")
+
+        # 4. Weighted Calculation
+        # Weights: AI (30%), Static/Ruff (30%), Runtime (40%)
+        parts = []
+        
+        # AI Gate (30%)
+        if ai_res:
+            parts.append((ai_res.score, 0.30, f"AI: {ai_res.reason}"))
+            
+        # Static Analysis (30%)
         if lang == "python":
-            # 40% AI, 30% Ruff, 30% AST Static
-            parts = []
-            if ai_res and ai_res.score > 0:
-                parts.append((ai_res.score, 0.40, f"AI: {ai_res.reason}"))
-
-            if ruff_res and ruff_res.score < 100:  # Only if Ruff was able to run
+            if ruff_res and ruff_res.score < 100:
                 parts.append((ruff_res.score, 0.30, f"Ruff: {ruff_res.reason}"))
-            else:
-                # If Ruff skipped or not found, redistribute weight to static
-                if python_static_res:
-                    static_weight = 0.60
-                    parts.append(
-                        (
-                            python_static_res.score,
-                            static_weight,
-                            f"Static (AST): {python_static_res.reason}",
-                        )
-                    )
-                elif ai_res:
-                    pass
+            elif python_static_res:
+                parts.append((python_static_res.score, 0.30, f"Static: {python_static_res.reason}"))
+        elif eslint_res:
+            parts.append((eslint_res.score, 0.30, f"ESLint: {eslint_res.reason}"))
 
-            # Re-calculate with normalized weights if some failed
-            total_weight = sum(p[1] for p in parts)
-            if total_weight > 0:
-                for score, weight, reason in parts:
-                    final_score += score * (weight / total_weight)
-                    reasons.append(reason)
-            else:
-                final_score = 0.0
-                reasons.append("All Python evaluations failed.")
+        # Runtime Verification (40%) - THE MOST CRITICAL
+        if runtime_res:
+            runtime_score = runtime_res.score
+            
+            # HARD BLOCK: If it's NOT a draft and tests fail with logic error (score 0), 
+            # we force final score to 0 to trigger rejection.
+            if runtime_score == 0 and not is_draft:
+                return {
+                    "score": 0.0,
+                    "reason": f"Critical Logic Failure (Non-Draft): {runtime_res.reason}",
+                    "details": {k: {"score": v.score, "reason": v.reason} for k, v in results.items()},
+                }
+                
+            parts.append((runtime_score, 0.40, f"Runtime: {runtime_res.reason}"))
 
-        elif lang in ["javascript", "typescript", "javascriptreact", "typescriptreact"]:
-            # 60% AI, 40% ESLint
-            if eslint_res and eslint_res.score < 100:
-                if ai_res and ai_res.score > 0:
-                    final_score = (ai_res.score * 0.6) + (eslint_res.score * 0.4)
-                    reasons.append(f"AI: {ai_res.reason}")
-                    reasons.append(f"ESLint: {eslint_res.reason}")
-                else:
-                    final_score = eslint_res.score
-                    reasons.append(f"AI failed. ESLint: {eslint_res.reason}")
-            else:
-                if ai_res:
-                    final_score = ai_res.score
-                    reasons.append(f"AI: {ai_res.reason}")
-                else:
-                    final_score = 0
-                    reasons.append("All JS/TS evaluations failed.")
+        # Normalized weight calculation
+        total_weight = sum(p[1] for p in parts)
+        if total_weight > 0:
+            for score, weight, reason in parts:
+                final_score += score * (weight / total_weight)
+                reasons.append(reason)
         else:
-            # 100% LLM for other languages
-            if ai_res:
-                final_score = ai_res.score
-                reasons.append(f"AI ({lang}): {ai_res.reason}")
-            else:
-                final_score = 0
-                reasons.append(
-                    "AI Evaluation failed and no static analyzer for this language."
-                )
+            final_score = 0.0
+            reasons.append("No applicable evaluators succeeded.")
 
         return {
             "score": final_score,

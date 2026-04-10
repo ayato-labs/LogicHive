@@ -18,6 +18,7 @@ async def init_db():
     await db.execute("""
     CREATE TABLE IF NOT EXISTS logichive_functions (
         id TEXT PRIMARY KEY,
+        project TEXT DEFAULT 'default',
         name TEXT NOT NULL,
         code TEXT NOT NULL,
         description TEXT,
@@ -33,7 +34,7 @@ async def init_db():
         test_code TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(name)
+        UNIQUE(project, name)
     );
     """)
 
@@ -42,6 +43,7 @@ async def init_db():
     CREATE TABLE IF NOT EXISTS logichive_function_history (
         history_id TEXT PRIMARY KEY,
         function_id TEXT NOT NULL,
+        project TEXT DEFAULT 'default',
         name TEXT NOT NULL,
         code TEXT NOT NULL,
         description TEXT,
@@ -57,7 +59,7 @@ async def init_db():
 
     # Create indices for performance
     await db.execute(
-        "CREATE INDEX IF NOT EXISTS idx_func_name ON logichive_functions(name);"
+        "CREATE INDEX IF NOT EXISTS idx_func_project_name ON logichive_functions(project, name);"
     )
     await db.execute(
         "CREATE INDEX IF NOT EXISTS idx_func_hash ON logichive_functions(code_hash);"

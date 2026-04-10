@@ -25,6 +25,7 @@ dependencies = [
     "streamlit",
     "pandas",
     "pyinstaller",
+    "psutil",
 ]
 
 [tool.setuptools.packages.find]

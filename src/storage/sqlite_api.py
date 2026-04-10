@@ -57,10 +57,13 @@ class SqliteStorage:
             db = await get_db_connection()
             db.row_factory = aiosqlite.Row
 
-            # 1. Check if name exists to handle versioning
+            project = function_data.get("project", "default")
+            name = function_data["name"]
+
+            # 1. Check if name exists in specific project to handle versioning
             async with db.execute(
-                "SELECT id, code, code_hash, version FROM logichive_functions WHERE name = ?",
-                (function_data["name"],),
+                "SELECT id, code, code_hash, version FROM logichive_functions WHERE project = ? AND name = ?",
+                (project, name),
             ) as cursor:
                 row = await cursor.fetchone()
                 existing = dict(row) if row else None
@@ -69,14 +72,14 @@ class SqliteStorage:
             new_version = 1
 
             if existing:
-                # If code has changed, archive the old version
-                if existing["code_hash"] != function_data["code_hash"]:
-                    new_version = existing["version"] + 1
+                # Case A: Code changed -> Increment version and archive old
+                if existing["code_hash"] != function_data.get("code_hash"):
+                    new_version = (existing.get("version") or 0) + 1
 
                     # Get full details of existing to archive
                     async with db.execute(
-                        "SELECT * FROM logichive_functions WHERE name = ?",
-                        (function_data["name"],),
+                        "SELECT * FROM logichive_functions WHERE project = ? AND name = ?",
+                        (project, name),
                     ) as cursor:
                         full_existing_row = await cursor.fetchone()
 
@@ -85,13 +88,16 @@ class SqliteStorage:
                             db, dict(full_existing_row)
                         )
                 else:
-                    # Unchanged code, we can just return or perform a stay-put update
-                    await db.close()
-                    return True
+                    # Case B: Code same, but metadata (description, score, etc.) might have changed
+                    # Keep same ID and version
+                    row_id = existing["id"]
+                    new_version = existing["version"]
+                    logger.debug(f"SQLite: In-place update for '{name}' (same code_hash)")
 
             data = (
                 existing["id"] if existing else row_id,
-                function_data["name"],
+                project,
+                name,
                 function_data["code"],
                 function_data.get("description", ""),
                 function_data.get("language", "python"),
@@ -110,8 +116,8 @@ class SqliteStorage:
             await db.execute(
                 """
                 INSERT OR REPLACE INTO logichive_functions 
-                (id, name, code, description, language, tags, reliability_score, test_metrics, embedding, code_hash, version, dependencies, test_code)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (id, project, name, code, description, language, tags, reliability_score, test_metrics, embedding, code_hash, version, dependencies, test_code)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 data,
             )
@@ -122,11 +128,11 @@ class SqliteStorage:
             # Incremental FAISS update
             if "embedding" in function_data:
                 await vector_manager.add_vector(
-                    function_data["name"], function_data["embedding"]
+                    name, function_data["embedding"], project=project
                 )
 
             logger.info(
-                f"SQLite: Successfully saved version {new_version} of function '{function_data['name']}'"
+                f"SQLite: Successfully saved version {new_version} of function '{name}' in project '{project}'"
             )
             return True
         except Exception as e:
@@ -148,183 +154,165 @@ class SqliteStorage:
             logger.error(f"SQLite: Failed to list all functions: {e}")
             return []
 
-    async def delete_function(self, name: str) -> bool:
+    async def delete_function(self, name: str, project: str = "default") -> bool:
         """
-        Deletes a function from the database by name.
+        Deletes a function from the database by project and name.
         """
         try:
             db = await get_db_connection()
-            await db.execute("DELETE FROM logichive_functions WHERE name = ?", (name,))
+            await db.execute(
+                "DELETE FROM logichive_functions WHERE project = ? AND name = ?",
+                (project, name),
+            )
             await db.commit()
             await db.close()
-            logger.info(f"SQLite: Function '{name}' deleted.")
+            logger.info(f"SQLite: Function '{name}' in project '{project}' deleted.")
             return True
         except Exception as e:
-            logger.error(f"SQLite: Failed to delete function '{name}': {e}")
+            logger.error(
+                f"SQLite: Failed to delete function '{name}' in project '{project}': {e}"
+            )
             return False
 
     async def find_similar_functions(
         self,
-        embedding: Optional[List[float]] = None,
-        query_text: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-        language: Optional[str] = None,
+        embedding: List[float] = None,
         limit: int = 5,
-        match_threshold: float = 0.1,
+        query_text: str = None,
+        tags: List[str] = None,
+        language: str = None,
+        project: str = None,
+        include_code: bool = True,
     ) -> List[Dict[str, Any]]:
         """
-        Enhanced Hybrid Search: Combines Vector Similarity (FAISS) with SQL-based Keyword/Tag/Language matching.
-
-        Args:
-            embedding: Vector embedding for semantic search.
-            query_text: Optional text for keyword/name/description matching.
-            tags: Optional list of tags for strict filtering.
-            language: Optional language for strict filtering (e.g., "python").
-            limit: Maximum results to return.
-            match_threshold: Minimum similarity score for vector results.
+        Hybrid search combining FAISS vector search and SQLite keyword/tag filtering.
         """
         try:
-            # 1. Initialize Vector Manager if needed
-            if not vector_manager._initialized:
-                db = await get_db_connection()
-                db.row_factory = aiosqlite.Row
-                async with db.execute(
-                    "SELECT name, embedding FROM logichive_functions WHERE embedding IS NOT NULL"
-                ) as cursor:
-                    rows = [dict(r) for r in await cursor.fetchall()]
-                await db.close()
-                await vector_manager.ensure_initialized(rows)
+            async with self._lock:
+                # 1. Initialize Vector Manager if needed
+                if not vector_manager._initialized:
+                    db = await get_db_connection()
+                    db.row_factory = aiosqlite.Row
+                    async with db.execute(
+                        "SELECT name, embedding, project FROM logichive_functions WHERE embedding IS NOT NULL"
+                    ) as cursor:
+                        rows = [dict(r) for r in await cursor.fetchall()]
+                    await db.close()
+                    await vector_manager.ensure_initialized(rows)
 
-            # 2. Perform vector search (Core semantic results)
-            vector_matches = []
-            if embedding and len(embedding) == VECTOR_DIMENSION:
-                try:
-                    vector_matches = await vector_manager.search(
-                        embedding, limit=limit * 5
-                    )
-                except Exception as ve:
-                    logger.warning(
-                        f"SQLite: Vector search failed, falling back to pure SQL: {ve}"
-                    )
-            else:
-                logger.info(
-                    "SQLite: Empty or invalid embedding, performing pure SQL/Tag search."
-                )
+                # 2. Perform vector search (Core semantic results)
+                vector_matches = []
+                if embedding and len(embedding) == VECTOR_DIMENSION:
+                    try:
+                        vector_matches = await vector_manager.search(
+                            embedding, limit=limit, project=project
+                        )
+                    except Exception as ve:
+                        logger.warning(
+                            f"SQLite: Vector search failed, falling back to pure SQL: {ve}"
+                        )
 
-            # 3. Perform SQL Keyword/Tag/Language Search (High-precision results)
-            sql_results = {}
-            if query_text or tags or language:
-                db = await get_db_connection()
-                db.row_factory = aiosqlite.Row
+                # 3. Perform SQL Keyword/Tag/Language Search (High-precision results)
+                sql_results = {}
+                select_fields = "name, description, language, tags, reliability_score, project, version, created_at, updated_at"
+                if include_code:
+                    select_fields = "*"
 
-                conditions = []
-                params = []
+                if query_text or tags or language or project:
+                    db = await get_db_connection()
+                    db.row_factory = aiosqlite.Row
 
-                # Handle #tag syntax in query_text
-                if query_text and query_text.startswith("#"):
-                    tag_from_text = query_text[1:].lower()
-                    if not tags:
-                        tags = [tag_from_text]
-                    else:
-                        tags.append(tag_from_text)
-                    query_text = None
+                    conditions = []
+                    params = []
 
-                # Keyword Match (Name or Description) - Support multi-word matching
-                if query_text:
-                    words = [
-                        w.strip() for w in query_text.split() if len(w.strip()) > 2
-                    ]
-                    if not words:  # Fallback for very short queries
-                        words = [query_text.strip()]
+                    if query_text and query_text.startswith("#"):
+                        tag_from_text = query_text[1:].lower()
+                        if not tags:
+                            tags = [tag_from_text]
+                        else:
+                            tags.append(tag_from_text)
+                        query_text = None
 
-                    word_conditions = []
-                    for word in words:
-                        word_conditions.append("(name LIKE ? OR description LIKE ?)")
-                        term = f"%{word.lower()}%"
-                        params.extend([term, term])
-
-                    if word_conditions:
+                    if query_text:
+                        words = [w.strip() for w in query_text.split() if len(w.strip()) > 2]
+                        if not words:
+                            words = [query_text.strip()]
+                        word_conditions = ["(name LIKE ? OR description LIKE ?)"] * len(words)
+                        for word in words:
+                            term = f"%{word.lower()}%"
+                            params.extend([term, term])
                         conditions.append(f"({' OR '.join(word_conditions)})")
 
-                # Tag Exact Match
-                if tags:
-                    for tag in tags:
-                        conditions.append(
-                            "EXISTS (SELECT 1 FROM json_each(tags) WHERE LOWER(value) = LOWER(?))"
-                        )
-                        params.append(tag)
+                    if tags:
+                        for tag in tags:
+                            conditions.append("EXISTS (SELECT 1 FROM json_each(tags) WHERE LOWER(value) = LOWER(?))")
+                            params.append(tag)
 
-                # Language Strict Match
-                if language:
-                    conditions.append("LOWER(language) = LOWER(?)")
-                    params.append(language)
+                    if language:
+                        conditions.append("LOWER(language) = LOWER(?)")
+                        params.append(language)
 
-                if conditions:
-                    where_clause = " AND ".join(conditions)
-                    sql = f"SELECT * FROM logichive_functions WHERE {where_clause} LIMIT {limit * 3}"
-                    logger.debug(f"SQLite: SQL Search: {sql} with {params}")
-                    async with db.execute(sql, params) as cursor:
-                        sql_rows = await cursor.fetchall()
+                    search_project = project or "default"
+                    conditions.append("project = ?")
+                    params.append(search_project)
 
-                    for row in sql_rows:
-                        processed = self._process_row(dict(row))
-                        # Boost SQL hits: 0.9 for keyword, higher if exact name match
-                        score = 0.9
-                        if (
-                            query_text
-                            and processed["name"].lower() == query_text.lower()
-                        ):
-                            score = 1.0
-                        processed["similarity"] = score
-                        sql_results[processed["name"]] = processed
+                    if conditions:
+                        where_clause = " AND ".join(conditions)
+                        sql = f"SELECT {select_fields} FROM logichive_functions WHERE {where_clause} LIMIT {limit * 3}"
+                        async with db.execute(sql, params) as cursor:
+                            sql_rows = await cursor.fetchall()
 
-                await db.close()
+                        for row in sql_rows:
+                            processed = self._process_row(dict(row))
+                            processed["similarity"] = 0.9 # Default SQL boost
+                            res_key = (processed.get("project", "default"), processed["name"])
+                            sql_results[res_key] = processed
+                    await db.close()
 
-            # 4. Hydrate and Merge
-            # Priority: Combine Vector similarity with SQL boost
-            final_results = sql_results  # Start with SQL results
+                # 4. Hydrate Vector results
+                final_results = sql_results
+                if vector_matches:
+                    db = await get_db_connection()
+                    db.row_factory = aiosqlite.Row
+                    for match in vector_matches:
+                        v_name = match["name"]
+                        v_project = match["project"]
+                        similarity = match["similarity"]
+                        res_key = (v_project, v_name)
 
-            db = await get_db_connection()
-            db.row_factory = aiosqlite.Row
+                        if res_key in final_results:
+                            final_results[res_key]["similarity"] = max(final_results[res_key]["similarity"], similarity)
+                        else:
+                            async with db.execute(
+                                f"SELECT {select_fields} FROM logichive_functions WHERE name = ? AND project = ?",
+                                (v_name, v_project),
+                            ) as cursor:
+                                row = await cursor.fetchone()
+                                if row:
+                                    processed = self._process_row(dict(row))
+                                    processed["similarity"] = similarity
+                                    final_results[res_key] = processed
+                    await db.close()
 
-            names_to_hydrate = []
-            similarities = {}
+                # 4. Final Aggregation
+                # Standardize all results to have consistent keys
+                final_results_list = []
+                for key, val in final_results.items():
+                    # val is a processed dict from _process_row or vector match
+                    res_dict = dict(val)
+                    p_key, n_key = key if isinstance(key, tuple) else ("default", key)
+                    
+                    if "project" not in res_dict:
+                        res_dict["project"] = p_key
+                    if "name" not in res_dict:
+                        res_dict["name"] = n_key
+                    if "similarity" not in res_dict:
+                        res_dict["similarity"] = 0.5
+                    
+                    final_results_list.append(res_dict)
 
-            for name, similarity in vector_matches:
-                if name in final_results:
-                    # If already in SQL results, combine scores
-                    final_results[name]["similarity"] = max(
-                        final_results[name]["similarity"], similarity
-                    )
-                elif similarity >= match_threshold:
-                    names_to_hydrate.append(name)
-                    similarities[name] = similarity
-
-            if names_to_hydrate:
-                placeholders = ", ".join(["?"] * len(names_to_hydrate))
-                # Apply language filter even to hydrated results if specified
-                lang_clause = "AND LOWER(language) = LOWER(?)" if language else ""
-                sql = f"SELECT * FROM logichive_functions WHERE name IN ({placeholders}) {lang_clause}"
-
-                query_params = names_to_hydrate.copy()
-                if language:
-                    query_params.append(language)
-
-                async with db.execute(sql, query_params) as cursor:
-                    db_rows = await cursor.fetchall()
-                    for db_row in db_rows:
-                        res = self._process_row(dict(db_row))
-                        name = res["name"]
-                        res["similarity"] = similarities[name]
-                        final_results[name] = res
-
-            await db.close()
-
-            # 5. Sort by combined similarity and limit
-            sorted_results = sorted(
-                final_results.values(), key=lambda x: x["similarity"], reverse=True
-            )
-            return sorted_results[:limit]
+                sorted_results = sorted(final_results_list, key=lambda x: x.get("similarity", 0), reverse=True)
+                return sorted_results[:limit]
 
         except Exception as e:
             logger.error("SQLite: Hybrid search failed", exc_info=True)
@@ -353,23 +341,30 @@ class SqliteStorage:
                 processed["dependencies"], "dependencies"
             )
 
+        if "project" not in processed or processed.get("project") is None:
+            processed["project"] = "default"
+        
         return processed
 
-    async def get_function_by_name(self, name: str) -> Optional[Dict[str, Any]]:
+    async def get_function_by_name(
+        self, name: str, project: str = "default"
+    ) -> Optional[Dict[str, Any]]:
         try:
             db = await get_db_connection()
             db.row_factory = lambda cursor, row: dict(
                 zip([col[0] for col in cursor.description], row)
             )
             async with db.execute(
-                "SELECT * FROM logichive_functions WHERE name = ?",
-                (name,),
+                "SELECT * FROM logichive_functions WHERE project = ? AND name = ?",
+                (project, name),
             ) as cursor:
                 row = await cursor.fetchone()
             await db.close()
             return self._process_row(row)
         except Exception as e:
-            logger.error(f"SQLite: Failed to get function '{name}': {e}")
+            logger.error(
+                f"SQLite: Failed to get function '{name}' in project '{project}': {e}"
+            )
             return None
 
     async def get_all_functions(self) -> List[Dict[str, Any]]:
@@ -388,19 +383,23 @@ class SqliteStorage:
 
     @retry_on_db_lock()
     @with_write_lock
-    async def increment_call_count(self, name: str) -> bool:
+    async def increment_call_count(self, name: str, project: str = "default") -> bool:
         try:
             db = await get_db_connection()
             await db.execute(
-                "UPDATE logichive_functions SET call_count = call_count + 1 WHERE name = ?",
-                (name,),
+                "UPDATE logichive_functions SET call_count = call_count + 1 WHERE project = ? AND name = ?",
+                (project, name),
             )
             await db.commit()
             await db.close()
             return True
         except Exception as e:
-            logger.error(f"SQLite: Increment failed for '{name}': {e}")
-            raise StorageError(f"Failed to increment call count for '{name}': {e}")
+            logger.error(
+                f"SQLite: Increment failed for '{name}' in project '{project}': {e}"
+            )
+            raise StorageError(
+                f"Failed to increment call count for '{name}' in project '{project}': {e}"
+            )
 
 
 # Singleton instance

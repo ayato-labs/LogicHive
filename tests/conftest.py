@@ -11,105 +11,160 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from storage.init_db import init_db
-from storage.sqlite_api import vector_manager
-
 from unittest.mock import MagicMock, AsyncMock, patch
 
-# Global mock instances for session-wide access
-_SESSION_MOCK_INTEL = MagicMock()
-_SESSION_MOCK_EVAL = MagicMock()
+class FakeLogicIntelligence:
+    """
+    A deterministic fake for LogicIntelligence that avoids MagicMock.
+    Returns stable results for testing without external API calls.
+    """
+    def __init__(self, api_key="fake_key"):
+        self.api_key = api_key
+
+    async def generate_embedding(self, text: str):
+        # Deterministic dummy embedding: repeating a simple hash of the text
+        import hashlib
+        h = int(hashlib.md5(text.encode()).hexdigest(), 16)
+        val = (h % 1000) / 1000.0
+        return [val] * 768
+
+    async def evaluate_quality(self, code: str):
+        # Basic heuristic for "good" vs "bad" code for testing
+        if len(code) < 10 or "error" in code.lower():
+            return {"score": 10, "reason": "Fake: Code too short or contains 'error'"}
+        return {"score": 90, "reason": "Fake: Looks good"}
+
+    async def expand_query(self, query: str):
+        # Deterministic expansion that avoids triggering global drafts
+        return f"TECHNICAL_QUERY: {query}"
+
+    async def rerank_results(self, query: str, results: list, limit: int = 5):
+        return results[:limit]
+
+    def construct_search_document(self, name: str, description: str, tags: list, code: str = ""):
+        return f"{name} {description} {' '.join(tags)}"
+
+    async def optimize_metadata(self, code: str):
+        return {"description": "Automated description", "tags": ["auto"]}
+
+    async def _call_llm_async(self, prompt: str, use_json: bool = False):
+        """
+        Simulates internal LLM calls used by plugins/consolidation.
+        Uses keywords in prompt to trigger specific deterministic behaviors.
+        """
+        prompt_lower = prompt.lower()
+        if "syntax error" in prompt_lower or "not runnable" in prompt_lower:
+            return {"score": 0, "reason": "Fake: Detected syntax errors"}
+        if "injection" in prompt_lower or "<script>" in prompt_lower:
+            return {"score": 0, "reason": "Fake: Potential injection attempt blocked"}
+        
+        if "break" in prompt_lower:
+            return None
+        if "fail" in prompt_lower:
+            return {}
+            
+        # Success response (Default)
+        if use_json:
+            return {
+                "name": "fake_func",
+                "code": "def fake_func(): pass",
+                "description": "A fake function generated for testing",
+                "tags": ["fake"],
+                "dependencies": [],
+                "score": 95,
+                "reason": "Fake: High quality code"
+            }
+        return "TECHNICAL_QUERY_EXPANSION"
+
+
+def pytest_configure(config):
+    """Register custom markers."""
+    config.addinivalue_line("markers", "use_real_intelligence: marker to skip the automatic patching of LogicIntelligence with FakeLogicIntelligence")
+
+@pytest.fixture(autouse=True)
+def intelligence_isolation(request):
+    """
+    Autouse fixture that patches LogicIntelligence with its Fake implementation by default.
+    Specific unit tests can opt-out using @pytest.mark.use_real_intelligence.
+    """
+    if "use_real_intelligence" in request.keywords:
+        yield
+        return
+
+    patches = [
+        patch("core.consolidation.LogicIntelligence", new=FakeLogicIntelligence),
+        patch("orchestrator.LogicIntelligence", new=FakeLogicIntelligence),
+        patch("core.plugins.draft_generator.LogicIntelligence", new=FakeLogicIntelligence),
+        patch("core.evaluation.plugins.ai.LogicIntelligence", new=FakeLogicIntelligence),
+    ]
+    
+    started_patches = []
+    for p in patches:
+        started_patches.append(p.start())
+    
+    yield
+    
+    for p in patches:
+        p.stop()
 
 
 @pytest.fixture(scope="session", autouse=True)
-def global_mock_ai():
-    """Globally mocks AI components if GEMINI_API_KEY is missing, ensuring CI passes."""
-    if not os.environ.get("GEMINI_API_KEY"):
-        # Configure universal mock for LogicIntelligence
-        _SESSION_MOCK_INTEL.generate_embedding = AsyncMock(return_value=[0.1] * 768)
-        _SESSION_MOCK_INTEL.evaluate_quality = AsyncMock(
-            return_value={"score": 85, "reason": "Mocked pass"}
-        )
-        _SESSION_MOCK_INTEL.expand_query = AsyncMock(side_effect=lambda x: x)
-        _SESSION_MOCK_INTEL.rerank_results = AsyncMock(
-            side_effect=lambda q, res, limit: res[:limit]
-        )
-        _SESSION_MOCK_INTEL.optimize_metadata = MagicMock(
-            return_value={"description": "Mocked technical desc", "tags": ["mock"]}
-        )
-        _SESSION_MOCK_INTEL.construct_search_document = MagicMock(
-            return_value="search doc"
-        )
+def global_test_config():
+    """Placeholder for session-scoped setup (logic moved to sessionstart)."""
+    yield
 
-        # Configure universal mock for EvaluationManager
-        # Smarter mock for EvaluationManager to support quality gate rejections in tests
-        async def mock_evaluate_all(code, language, **kwargs):
-            # Instant rejection for obvious syntax errors (unbalanced brackets/tags)
-            if (
-                code.count("(") != code.count(")")
-                or code.count("{") != code.count("}")
-                or code.count("<") != code.count(">")
-            ):
-                from core.exceptions import ValidationError
 
-                raise ValidationError(f"Mocked syntax error rejection ({language})")
-            return {"score": 85.0, "reason": "Mocked validation pass", "details": {}}
-
-        _SESSION_MOCK_EVAL.evaluate_all = AsyncMock(side_effect=mock_evaluate_all)
-
-        # Patch multiple potential import paths using SAME instances
-        patches = [
-            patch("orchestrator.LogicIntelligence", return_value=_SESSION_MOCK_INTEL),
-            patch("orchestrator.EvaluationManager", return_value=_SESSION_MOCK_EVAL),
-            patch(
-                "core.consolidation.LogicIntelligence", return_value=_SESSION_MOCK_INTEL
-            ),
-            patch(
-                "core.evaluation.manager.EvaluationManager",
-                return_value=_SESSION_MOCK_EVAL,
-            ),
-        ]
-
-        for p in patches:
-            p.start()
-
-        yield
-
-        for p in patches:
-            p.stop()
-    else:
-        yield
+@pytest.fixture
+def fake_intel():
+    """Provides a deterministic FakeLogicIntelligence instance."""
+    return FakeLogicIntelligence()
 
 
 @pytest.fixture
 def mock_intel():
-    """Provides the SAME session-scoped mock instance for call tracking in tests."""
-    return _SESSION_MOCK_INTEL
+    """Alias for integration_mock_intel to support existing tests."""
+    mock = MagicMock()
+    mock.generate_embedding = AsyncMock(return_value=[0.1] * 768)
+    mock.evaluate_quality = AsyncMock(return_value={"score": 85, "reason": "Mocked pass"})
+    mock.optimize_metadata = AsyncMock(return_value={"description": "Optimized description", "tags": ["ai-tag"]})
+    return mock
 
 
 @pytest.fixture
 async def test_db():
-    """Fixtures that ensures a clean database FOR EACH TEST."""
-    # Use session cleanup logic but trigger per-test
-    db_path = os.environ.get("SQLITE_DB_PATH", "test_logichive.db")
-    if os.path.exists(db_path):
-        os.remove(db_path)
-
+    from storage.init_db import init_db
+    # File removal is now handled in clear_cache autouse fixture for reliability
     await init_db()
     yield
-    # No immediate cleanup to allow debugging if needed, but next test will wipe it.
+    # No cleanup here; let the next test handle it or clear_cache handle it
 
 
 @pytest.fixture(autouse=True)
 async def clear_cache():
-    """Resets the vector manager state between tests and ensures it is marked as initialized for unit tests."""
+    """Resets the vector manager state between tests."""
     import faiss
+    from storage.sqlite_api import vector_manager
+    import os
 
     vector_manager.id_to_name = {}
     vector_manager.name_to_id = {}
     vector_manager._current_id = 0
+    # Re-initialize to a fresh empty index
     vector_manager.index = faiss.IndexFlatIP(768)
-    vector_manager._initialized = (
-        True  # Force initialized to skip loading during unit tests
-    )
+    vector_manager._initialized = True
+    
+    # Also remove physical index files if they exist to prevent cross-contamination
+    for f in [os.environ.get("FAISS_INDEX_PATH"), os.environ.get("FAISS_MAPPING_PATH"), os.environ.get("SQLITE_DB_PATH")]:
+        if f and os.path.exists(f):
+            try:
+                # On Windows, we might need multiple attempts if the file is being closed
+                import time
+                for _ in range(3):
+                    try:
+                        os.remove(f)
+                        break
+                    except PermissionError:
+                        time.sleep(0.1)
+            except Exception:
+                pass
     yield

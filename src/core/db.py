@@ -2,11 +2,9 @@ import aiosqlite
 import logging
 import asyncio
 from functools import wraps
+from core.config import SQLITE_DB_PATH
 
 logger = logging.getLogger(__name__)
-
-
-from core.config import SQLITE_DB_PATH
 
 
 async def get_db_connection() -> aiosqlite.Connection:

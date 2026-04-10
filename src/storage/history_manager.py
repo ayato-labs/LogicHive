@@ -18,12 +18,13 @@ class HistoryManager:
         await db.execute(
             """
             INSERT INTO logichive_function_history 
-            (history_id, function_id, name, code, description, tags, language, version, code_hash, dependencies, test_code)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (history_id, function_id, project, name, code, description, tags, language, version, code_hash, dependencies, test_code)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 history_id,
                 existing_row["id"],
+                existing_row.get("project", "default"),
                 existing_row["name"],
                 existing_row["code"],
                 existing_row["description"],
