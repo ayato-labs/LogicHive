@@ -104,7 +104,7 @@ async def run_audit():
         if saved_v2["version"] == 2:
             print("✅ PASSED: Versioning worked (Incremented to 2)")
             # Check history
-            db = await sqlite_storage.get_all_functions()  # Actually simpler to check history table directly but let's use what we have or just assume it's there
+            await sqlite_storage.get_all_functions()
             print(f"ℹ️ Info: Current version code hash: {saved_v2['code_hash']}")
         else:
             print(

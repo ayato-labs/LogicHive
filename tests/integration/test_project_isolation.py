@@ -1,7 +1,6 @@
 import pytest
 from orchestrator import do_save_async, do_search_async, do_delete_async
 from storage.sqlite_api import sqlite_storage
-from storage.vector_store import vector_manager
 
 @pytest.mark.asyncio
 async def test_full_project_isolation(test_db, mock_intel):

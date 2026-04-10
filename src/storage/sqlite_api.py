@@ -72,9 +72,9 @@ class SqliteStorage:
             new_version = 1
 
             if existing:
-                # If code has changed, archive the old version
-                if existing["code_hash"] != function_data["code_hash"]:
-                    new_version = existing["version"] + 1
+                # Case A: Code changed -> Increment version and archive old
+                if existing["code_hash"] != function_data.get("code_hash"):
+                    new_version = (existing.get("version") or 0) + 1
 
                     # Get full details of existing to archive
                     async with db.execute(
@@ -88,9 +88,11 @@ class SqliteStorage:
                             db, dict(full_existing_row)
                         )
                 else:
-                    # Unchanged code, we can just return or perform a stay-put update
-                    await db.close()
-                    return True
+                    # Case B: Code same, but metadata (description, score, etc.) might have changed
+                    # Keep same ID and version
+                    row_id = existing["id"]
+                    new_version = existing["version"]
+                    logger.debug(f"SQLite: In-place update for '{name}' (same code_hash)")
 
             data = (
                 existing["id"] if existing else row_id,
@@ -225,13 +227,16 @@ class SqliteStorage:
 
                     if query_text and query_text.startswith("#"):
                         tag_from_text = query_text[1:].lower()
-                        if not tags: tags = [tag_from_text]
-                        else: tags.append(tag_from_text)
+                        if not tags:
+                            tags = [tag_from_text]
+                        else:
+                            tags.append(tag_from_text)
                         query_text = None
 
                     if query_text:
                         words = [w.strip() for w in query_text.split() if len(w.strip()) > 2]
-                        if not words: words = [query_text.strip()]
+                        if not words:
+                            words = [query_text.strip()]
                         word_conditions = ["(name LIKE ? OR description LIKE ?)"] * len(words)
                         for word in words:
                             term = f"%{word.lower()}%"
@@ -260,7 +265,8 @@ class SqliteStorage:
                         for row in sql_rows:
                             processed = self._process_row(dict(row))
                             processed["similarity"] = 0.9 # Default SQL boost
-                            sql_results[processed["name"]] = processed
+                            res_key = (processed.get("project", "default"), processed["name"])
+                            sql_results[res_key] = processed
                     await db.close()
 
                 # 4. Hydrate Vector results
@@ -272,9 +278,10 @@ class SqliteStorage:
                         v_name = match["name"]
                         v_project = match["project"]
                         similarity = match["similarity"]
+                        res_key = (v_project, v_name)
 
-                        if v_name in final_results and final_results[v_name].get("project") == v_project:
-                            final_results[v_name]["similarity"] = max(final_results[v_name]["similarity"], similarity)
+                        if res_key in final_results:
+                            final_results[res_key]["similarity"] = max(final_results[res_key]["similarity"], similarity)
                         else:
                             async with db.execute(
                                 f"SELECT {select_fields} FROM logichive_functions WHERE name = ? AND project = ?",
@@ -284,10 +291,27 @@ class SqliteStorage:
                                 if row:
                                     processed = self._process_row(dict(row))
                                     processed["similarity"] = similarity
-                                    final_results[v_name] = processed
+                                    final_results[res_key] = processed
                     await db.close()
 
-                sorted_results = sorted(final_results.values(), key=lambda x: x["similarity"], reverse=True)
+                # 4. Final Aggregation
+                # Standardize all results to have consistent keys
+                final_results_list = []
+                for key, val in final_results.items():
+                    # val is a processed dict from _process_row or vector match
+                    res_dict = dict(val)
+                    p_key, n_key = key if isinstance(key, tuple) else ("default", key)
+                    
+                    if "project" not in res_dict:
+                        res_dict["project"] = p_key
+                    if "name" not in res_dict:
+                        res_dict["name"] = n_key
+                    if "similarity" not in res_dict:
+                        res_dict["similarity"] = 0.5
+                    
+                    final_results_list.append(res_dict)
+
+                sorted_results = sorted(final_results_list, key=lambda x: x.get("similarity", 0), reverse=True)
                 return sorted_results[:limit]
 
         except Exception as e:
@@ -317,6 +341,9 @@ class SqliteStorage:
                 processed["dependencies"], "dependencies"
             )
 
+        if "project" not in processed or processed.get("project") is None:
+            processed["project"] = "default"
+        
         return processed
 
     async def get_function_by_name(

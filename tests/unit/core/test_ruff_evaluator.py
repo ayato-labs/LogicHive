@@ -19,8 +19,9 @@ async def test_ruff_evaluator_with_issues():
     result = await evaluator.evaluate(code, "python")
     # If ruff is installed, score should be < 100.
     # We check if it ran by looking at the reason or score.
-    if "Ruff not available" in result.reason:
-        pytest.skip("Ruff not installed in environment")
+    # If ruff check skipped due to environment error, we should skip the test.
+    if "Ruff check skipped" in result.reason:
+        pytest.skip("Ruff not found or failed in environment")
 
     assert result.score < 100.0
     assert "Ruff: Found" in result.reason

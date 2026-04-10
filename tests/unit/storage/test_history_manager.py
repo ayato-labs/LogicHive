@@ -1,5 +1,4 @@
 import pytest
-import sqlite3
 import aiosqlite
 from storage.history_manager import HistoryManager
 

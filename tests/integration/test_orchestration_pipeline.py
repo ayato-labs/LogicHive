@@ -60,7 +60,7 @@ async def test_orchestrator_metadata_optimization(test_db, mock_intel):
     name = "no_meta_func"
     await do_save_async(
         name=name,
-        code="pass",
+        code="def optimized_func(): pass", # Longer code for AI Gate
         description="", # Empty
         tags=[],        # Empty
         project="meta-proj"

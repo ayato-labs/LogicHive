@@ -6,7 +6,7 @@ import json
 import time
 import traceback
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 from .base import BaseExecutor, ExecutionResult, ExecutionStatus, ExecutionLogs, ExecutionError, Result
 from .factory import ExecutorFactory
 
@@ -57,19 +57,21 @@ class EphemeralPythonExecutor(BaseExecutor):
                 cmd.extend(["--with", dep])
             cmd.extend(["python", str(harness_file)])
 
-            # 3. Execute
+            # 3. Execute with isolated environment
+            process_env = {
+                k: v for k, v in os.environ.items() 
+                if k in ["PATH", "SYSTEMROOT", "SystemDrive", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP", "USERNAME"]
+            }
+            process_env["PYTHONPATH"] = ""
+            process_env["PYTHONNOUSERSITE"] = "1" # Block user-level site-packages
+            
             try:
-                # We use asyncio.create_subprocess_exec for better control and timeout support
                 process = await asyncio.create_subprocess_exec(
                     *cmd,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                     cwd=tmpdir,
-                    # Ensure uv can find its cache and temp locations on Windows
-                    env={
-                        k: v for k, v in os.environ.items() 
-                        if k in ["PATH", "SYSTEMROOT", "HOME", "USER", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP"]
-                    },
+                    env=process_env,
                 )
 
                 try:

@@ -124,9 +124,8 @@ class RuffEvaluator(BaseEvaluator):
             if not issues:
                 return EvaluationResult(score=100.0, reason="Ruff: No issues found.")
 
-            # Scoring logic: Deduct points for each issue, heavily for errors
+            # Scoring logic: Deduct points for each issue
             score = 100.0
-            error_count = 0
             warning_count = 0
             for issue in issues:
                 # Ruff JSON format has 'code' (like E402)
@@ -141,8 +140,8 @@ class RuffEvaluator(BaseEvaluator):
             )
 
         except Exception as e:
-            logger.error(f"RuffEvaluator Error: {e}")
-            return EvaluationResult(score=100.0, reason=f"Ruff check failed: {e}")
+            logger.warning(f"RuffEvaluator Error: {e}")
+            return EvaluationResult(score=100.0, reason=f"Ruff check skipped due to error: {e}")
 
 
 class ESLintEvaluator(BaseEvaluator):

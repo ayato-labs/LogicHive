@@ -1,82 +1,98 @@
-![CI Status](https://github.com/Ayato-AI-for-Auto/LogicHive/actions/workflows/cd.yml/badge.svg)
-# 🛡️ LogicHive: Private AI Logic Hub
+![CD Pipeline](https://github.com/Ayato-AI-for-Auto/LogicHive/actions/workflows/cd.yml/badge.svg)
+# 🛡️ LogicHive: Professional AI Logic Hub
 
-LogicHiveは、エンジニアが「一度書いた最高の実装」を資産として蓄積し、AIエージェント（Antigravity, Cursor, Gemini等）を通じて瞬時に呼び出し・再利用するためのプライベート・ロジック・ハブです。
+LogicHiveは、エンジニアが「一度書いた最高の実装」を資産として蓄積し、AIエージェント（Antigravity, Cursor, Gemini等）を通じて瞬時に呼び出し・再利用するための**プロフェッショナル向けプライベート・ロジック・ハブ**です。
+
+> **哲学：巨人の肩の上に乗り、独自の価値創造に注力せよ。**
+
+---
 
 ## 🌟 主な特徴
-- **プライベート運用 (デフォルト)**: SQLite (WALモード) と FAISS を使用。GitHub連携不要で即座に動作。
-- **柔軟な自動同期 (オプショナル)**: 必要に応じてGitHubのプライベートリポジトリと同期可能。多人数・複数デバイスでの「知財共有」を実現。
-- **セーフ削除（アーカイブ）**: `delete_function` で削除したロジックは、GitHub同期有効時は `archives/` へ自動退避。
-- **高精度AI再ランキング**: Gemini LLMによる関連性の再評価（Re-ranking）で、最適なロジックを提案。
-- **インテリジェント・品質ゲート**: Gemini APIによる解析と静的解析ツールを組み合わせた自動審査（Score 0-100）。
-- **マルチエージェント協調**: Antigravity, Cursor, Gemini CLI 等の主要エージェントとMCP経由でシームレスに統合。
+
+### 1. 3層構造の厳格な品質ゲート (Quality Gate)
+AIエージェントが生成したコードを、3つの指標（30/30/40）で自動審査。
+- **AI Gate (30%)**: Gemini 1.5 Proによる多角的なロジック検証と改善案。
+- **Static Analysis (30%)**: Ruff / Radon による構文確認とコードの複雑度計測。
+- **Runtime Verification (40%)**: サンドボックス内でのテストコード実行。
+合格した資産のみが `[VERIFIED]` として Vault に永続化されます。
+
+### 2. 高セキュア・コード実行サンドボックス
+`EphemeralPythonExecutor` を搭載し、安全なコード検証を実現。
+- **Network Isolation**: `uv --offline` による物理的なネットワーク遮断。
+- **Environment Isolation**: ホスト環境変数（APIキー等）の漏洩を完全に防止。
+- **Auto Dependency**: 必要ライブラリを `uv run` で一時的に自動構成し実行。
+
+### 3. マルチテナント対応 RAG Isolation
+複数のプロジェクトが混在しても、知財が混ざることはありません。
+- **Composite Indexing**: `(project, name)` ベースの複合キーによるFAISSインデックス管理。
+- **Metadata Management**: プロジェクトごとに厳格に分離された SQLite / FAISS 検索空間。
+
+### 4. ローカルファースト & ハイブリッド成長
+SQLite (WAL) と FAISS CPU を採用し、外部DB不要で爆速検索。
+- **GitHub Sync (Optional)**: プライベートリポジトリと自動同期し、アーカイブ保護を実現。
 
 ---
 
 ## 🚀 セットアップ
 
-### 1. 依存関係のインストール
-`uv` を使用して、プロジェクトの依存関係をインストール・同期します。
+`uv` を基盤とした、1コマンドでのプロフェッショナルな環境構築に対応しています。
 
+### 1. 依存関係のインストール
 ```powershell
 uv pip install -e .
 ```
 
 ### 2. 環境設定 (.env)
-`.env.example` を `.env` にコピーし、必要な項目を設定してください。
+`.env.example` を `.env` にコピーし、`GEMINI_API_KEY` を設定してください。
 
-- **必須**: `GEMINI_API_KEY` (品質評価とRAGに使用)
-- **任意 (同期機能)**: `ENABLE_AUTO_BACKUP=true` に設定し、`GITHUB_TOKEN` を入力することでGitHub同期が有効になります。
-
-### 3. MCPの登録（自動設定）
-プロジェクト内の `scripts/register_mcp.bat` を実行してください。以下の設定が試行されます。
-
-- **対応エージェント**: Gemini CLI, Antigravity, Cursor, Cloude Code
-- **指示の自動注入**: `~/.gemini/GEMINI.md` 等へ「LogicHiveを活用する」というルールを追記します。
-
-### 3. システムの起動
-
-- **Streamlit UI (閲覧・検索)**:
-  `run_ui.bat` をダブルクリックして、ブラウザからVaultの内容を視覚的に確認・検索できます。
-- **MCPサーバー (AIエージェント用)**:
-  エージェントが自動的に起動しますが、手動でテストする場合は `uv run src/mcp_server.py` を実行します。
-
-### 4. データの復元 (Rehydrate)
-PCの乗り換えやデータ紛失時は、GitHubから一瞬で復元できます：
+### 3. MCPの登録
+AIエージェント（Desktop App等）から呼び出せるようにMCPサーバーを登録します。
 ```powershell
-uv run scripts/restore_backup.py
+uv run src/mcp_server.py
 ```
-これにより、最新のロジックとメタデータがローカルDBに同期され、埋め込みベクトルが再生成されます。
 
 ---
 
-## 🏗️ ビルドとデプロイ
+## 🤖 AIエージェント × LogicHive の運用サイクル
 
-### ローカルでのEXE化
-`uv run python ci_cd/build_exe.py` を実行することで、`dist/LogicHive-MCP.exe` が生成されます。ビルドには `LogicHive.spec` が使用されます。
-
-### GitHub Actions (CI/CD)
-GitHubへプッシュすると、自動的にビルドテストが実行されます。
-- **自動リリース**: `v*` タグ（例: `v0.2.0`）をプッシュすると、自動的にGitHub Releaseが作成され、最新のビルド済み `.exe` が添付されます。
-- **手動実行**: GitHub Actionsタブから `workflow_dispatch` を利用して手動でビルドを開始することも可能です。
+1. **Discovery (探索)**: AIエージェントに「〜の処理が欲しい」と依頼。
+2. **Retrieval (抽出)**: LogicHive MCPが過去の良質な資産を提案。
+3. **Adaptation (適合)**: 提案されたコードを現在のプロジェクト向けに洗練。
+4. **Professionalization (資産化)**: 完成したコードを `save_function` で登録。
+5. **Stabilization (安定化)**: `tools/audit/stabilize_vault.py` が24時間体制でVault資産を監視。
 
 ---
 
-## 🤖 AIエージェントとの連携・思想
+## 🏗️ リポジトリ構造
 
-1. **Request (探索)**: AIエージェントに「〜する処理が欲しい」とリクエスト。
-2. **Retrieve (抽出)**: LogicHive MCPが過去の良質なロジック（38以上の初期登録済みロジックを含む）を提案。
-3. **Adaptation (適合)**: エージェントが、提案されたコードを現在のプロジェクトに適合させる。
-4. **Registration (資産化)**: 洗練されたコードを `save_function` で LogicHive に再登録。品質ゲートが自動で審査します。
+```text
+src/
+  ├── core/        # 評価、実行、DB接続のコアロジック
+  └── storage/     # SQLite, FAISS, History 管理
+tests/
+  ├── unit/        # 関数単位の単体テスト
+  ├── integration/ # コンポーネント間の結合テスト
+  └── system/      # ユーザーフロー全体の総合テスト
+tools/
+  ├── audit/       # 品質監視・監査ツール
+  ├── db/          # DB操作・バックアップ
+  └── migration/   # 旧データからの移行ツール
+```
+
+---
+
+## 🤝 Community & Support
+
+LogicHiveの開発、および「AIによる人間の作業からの解放」というビジョンを支援していただける方を募集しています。
+ご支援いただいた方には、感謝として限定Discordコミュニティ「Ayato's Dev Collective」への招待をお送りしています。
+
+[🛡️ OFUSEで支援してコミュニティに参加する](https://ofuse.me/21cfc1d2)
 
 ---
 
 ## 📄 ライセンス
 
 LogicHiveは **PolyForm Shield License 1.0.0** の下で公開されています。
-
-- **個人利用・社内利用**: 完全に無料です。
-- **改変・配布**: 自由に行えます。
-- **🚫 禁止事項**: 本ソフトウェアと **競合する製品またはサービス（SaaS等）を提供すること** は禁止されています。
+競合サービスの提供を除き、個人・商用問わず知財活用目的で自由にご利用いただけます。
 
 詳細は [LICENSE](LICENSE) を参照してください。

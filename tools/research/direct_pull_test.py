@@ -3,17 +3,17 @@ import os
 import sys
 
 # Add LogicHive src to path
-LOGICHIVE_ROOT = r"C:\Users\saiha\My_Service\programing\MCP\LogicHive"
+LOGICHIVE_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.append(os.path.join(LOGICHIVE_ROOT, "src"))
 
-# Force absolute paths
+# Force absolute paths (but derived relatively)
 os.environ["SQLITE_DB_PATH"] = os.path.join(
     LOGICHIVE_ROOT, "storage", "data", "logichive.db"
 )
 os.environ["FS_DATA_DIR"] = os.path.join(LOGICHIVE_ROOT, "storage", "data")
 
-from storage.sqlite_api import sqlite_storage
-import orchestrator
+from storage.sqlite_api import sqlite_storage  # noqa: E402
+import orchestrator  # noqa: E402
 
 
 async def pull_test():

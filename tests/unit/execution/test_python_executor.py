@@ -1,5 +1,4 @@
 import pytest
-import asyncio
 from core.execution.python import EphemeralPythonExecutor
 from core.execution.base import ExecutionStatus
 

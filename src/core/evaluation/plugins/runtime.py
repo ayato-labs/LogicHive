@@ -1,6 +1,4 @@
 import logging
-import asyncio
-from typing import Dict, Any, Optional, List
 from ..base import BaseEvaluator, EvaluationResult
 from ...execution.factory import ExecutorFactory
 from ...execution.base import ExecutionStatus
@@ -33,22 +31,19 @@ class RuntimeEvaluator(BaseEvaluator):
         dependencies = kwargs.get("dependencies", [])
         timeout = kwargs.get("timeout", 20)
 
-        # 1. If no tests, we just check if it imports/runs basic logic
-        # OR we could return 100 as 'skipped'. 
-        # LogicHive policy: If test_code isn't provided, we only check for syntax (handled by other plugins).
         if not test_code:
             return EvaluationResult(
-                score=100.0,
-                reason="No test code provided. Skipping runtime verification.",
-                details={"status": "skipped"}
+                score=40.0,
+                reason="No test code provided. Verification skipped.",
+                details={"status": "missing_tests"}
             )
 
         # 2. Get Executor
         executor = ExecutorFactory.get_executor(language)
         if not executor:
             return EvaluationResult(
-                score=100.0,
-                reason=f"No executor available for language '{language}'. Skipping runtime verification.",
+                score=0.0,
+                reason=f"Infrastructure Error: No executor available for language '{language}'.",
                 details={"status": "not_supported"}
             )
 

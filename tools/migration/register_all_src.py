@@ -11,10 +11,10 @@ logger = logging.getLogger(__name__)
 # Add src to path
 sys.path.append(os.path.abspath("src"))
 
-from storage.sqlite_api import sqlite_storage
-from core.consolidation import LogicIntelligence
-from core.config import GEMINI_API_KEY, GEMINI_MODEL
-from core.hash_utils import calculate_code_hash
+from storage.sqlite_api import sqlite_storage  # noqa: E402
+from core.consolidation import LogicIntelligence  # noqa: E402
+from core.config import GEMINI_API_KEY, GEMINI_MODEL  # noqa: E402
+from core.hash_utils import calculate_code_hash  # noqa: E402
 
 SYSTEM_ORG_ID = "00000000-0000-0000-0000-000000000000"
 

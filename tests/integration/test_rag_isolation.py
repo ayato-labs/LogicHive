@@ -1,6 +1,5 @@
 import pytest
 from orchestrator import do_save_async, do_search_async
-from storage.sqlite_api import sqlite_storage
 
 @pytest.mark.asyncio
 async def test_rag_project_isolation(test_db):
@@ -19,6 +18,7 @@ async def test_rag_project_isolation(test_db):
     assert len(results_alpha) > 0
     # Every result in alpha must be project 'alpha'
     for res in results_alpha:
+        print(f"ISO_DEBUG Alpha Result: Name={res['name']}, Project={res['project']}, Code={res.get('code', 'N/A')}")
         assert res["project"] == "alpha"
         assert "Project B" not in (res.get("code") or "")
         
@@ -26,13 +26,13 @@ async def test_rag_project_isolation(test_db):
     results_beta = await do_search_async(query="iso_func", project="beta")
     assert len(results_beta) > 0
     for res in results_beta:
+        print(f"ISO_DEBUG Beta Result: Name={res['name']}, Project={res['project']}, Code={res.get('code', 'N/A')}")
         assert res["project"] == "beta"
+        assert "Project A" not in (res.get("code") or "")
         
-    # 4. Global search (no project) - should return from 'default' (or empty if not found in default)
-    results_none = await do_search_async(query="iso_func", project=None)
-    # If project is None, it should default to 'default' or some global scope
-    # Our implementation uses project-based filtering if project is provided.
-    # If project is None, VectorIndexManager currently might search everything OR default.
-    # We hardened it to use the filter.
+    # 4. Global search - should return from 'default' (empty in this case)
+    results_none = await do_search_async(query="iso_func", project="default")
     for res in results_none:
+        # If any results leaked, verify they have project key
+        assert "project" in res
         assert res["project"] == "default"

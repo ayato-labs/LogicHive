@@ -1,7 +1,5 @@
 import pytest
-import asyncio
 from core.execution.factory import ExecutorFactory
-from core.execution.python import EphemeralPythonExecutor
 from core.execution.base import ExecutionStatus
 
 @pytest.mark.asyncio
@@ -37,7 +35,6 @@ async def test_sandbox_environment_leakage():
     Verify that sensitive environment variables (like API keys) are NOT leaked to the sandbox.
     """
     import os
-    from core.execution.base import ExecutionStatus
     os.environ["SECRET_TOKEN_LEAK"] = "PRIVATE_DATA"
     
     executor = ExecutorFactory.get_executor("python")

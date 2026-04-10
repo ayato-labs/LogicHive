@@ -9,8 +9,8 @@ sys.path.append(os.path.abspath("src"))
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
-from storage.auto_backup import backup_manager
-from core.config import GITHUB_TOKEN
+from storage.auto_backup import backup_manager  # noqa: E402
+from core.config import GITHUB_TOKEN  # noqa: E402
 
 
 async def restore_backup():

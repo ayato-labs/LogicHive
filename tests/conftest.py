@@ -122,18 +122,17 @@ def fake_intel():
 
 @pytest.fixture
 def mock_intel():
-    """Provides a fresh MagicMock instance for integration tests (permits call tracking)."""
-    from unittest.mock import MagicMock, AsyncMock
+    """Alias for integration_mock_intel to support existing tests."""
     mock = MagicMock()
     mock.generate_embedding = AsyncMock(return_value=[0.1] * 768)
     mock.evaluate_quality = AsyncMock(return_value={"score": 85, "reason": "Mocked pass"})
+    mock.optimize_metadata = AsyncMock(return_value={"description": "Optimized description", "tags": ["ai-tag"]})
     return mock
 
 
 @pytest.fixture
 async def test_db():
     from storage.init_db import init_db
-    db_path = os.environ.get("SQLITE_DB_PATH", "test_logichive.db")
     # File removal is now handled in clear_cache autouse fixture for reliability
     await init_db()
     yield
@@ -166,6 +165,6 @@ async def clear_cache():
                         break
                     except PermissionError:
                         time.sleep(0.1)
-            except:
+            except Exception:
                 pass
     yield

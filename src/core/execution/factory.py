@@ -1,14 +1,42 @@
 import logging
-from typing import Dict, Type, Optional
+import importlib
+import pkgutil
+from typing import Dict, Optional
 from .base import BaseExecutor
 
 logger = logging.getLogger(__name__)
 
 
 class ExecutorFactory:
-    """Registry and factory for code executors."""
+    """Registry and factory for code executors with dynamic loading."""
 
     _executors: Dict[str, BaseExecutor] = {}
+    _loaded = False
+
+    @classmethod
+    def _load_plugins(cls):
+        """Dynamically discovers and loads all executor plugins in the current package."""
+        if cls._loaded:
+            return
+        
+        try:
+            # Package is src.core.execution
+            package_name = __package__
+            package = importlib.import_module(package_name)
+            
+            for loader, name, is_pkg in pkgutil.walk_packages(
+                package.__path__, package.__name__ + "."
+            ):
+                if name.endswith("__init__") or name.endswith(".base") or name.endswith(".factory"):
+                    continue
+                try:
+                    importlib.import_module(name)
+                    logger.debug(f"ExecutorFactory: Loaded executor module {name}")
+                except Exception as e:
+                    logger.error(f"ExecutorFactory: Failed to load module {name}: {e}")
+            cls._loaded = True
+        except Exception as e:
+            logger.error(f"ExecutorFactory: Plugin discovery failed: {e}")
 
     @classmethod
     def register(cls, language: str, executor: BaseExecutor):
@@ -17,4 +45,5 @@ class ExecutorFactory:
 
     @classmethod
     def get_executor(cls, language: str) -> Optional[BaseExecutor]:
+        cls._load_plugins()
         return cls._executors.get(language.lower())

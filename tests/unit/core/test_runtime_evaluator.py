@@ -1,7 +1,5 @@
 import pytest
 from core.evaluation.plugins.runtime import RuntimeEvaluator
-from core.execution.factory import ExecutorFactory
-from core.execution.python import EphemeralPythonExecutor
 
 @pytest.fixture
 def runtime_evaluator():
@@ -33,10 +31,9 @@ async def test_runtime_evaluator_fail(runtime_evaluator):
 
 @pytest.mark.asyncio
 async def test_runtime_evaluator_no_test(runtime_evaluator):
-    """Verifies that the evaluator skips (100) if no test_code is provided."""
+    """Verifies that the evaluator returns 40 (unverified) if no test_code is provided."""
     code = "def check(): return True"
-    
     result = await runtime_evaluator.evaluate(code, "python")
     
-    assert result.score == 100.0
+    assert result.score == 40.0
     assert "No test code provided" in result.reason

@@ -1,7 +1,5 @@
 import pytest
-import json
 from typing import List, Any
-from core.consolidation import LogicIntelligence
 from core.config import VECTOR_DIMENSION
 
 # -------------------------------------------------------------------

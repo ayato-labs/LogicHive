@@ -25,7 +25,7 @@ async def test_runtime_gate_blocks_save(eval_manager):
     )
     
     assert result["score"] == 0.0
-    assert "Critical Quality Failure (Runtime)" in result["reason"]
+    assert "Critical Logic Failure" in result["reason"]
     assert "ZeroDivisionError" in result["reason"]
 
 @pytest.mark.asyncio
@@ -59,4 +59,5 @@ async def test_runtime_gate_timeout_blocks(eval_manager):
     )
     
     assert result["score"] == 0.0
-    assert "timed out" in result["reason"]
+    assert "Critical Logic Failure" in result["reason"]
+    assert "timed out" in result["reason"].lower()

@@ -6,7 +6,13 @@ from typing import Any, Optional
 
 from storage.sqlite_api import sqlite_storage
 from core.consolidation import LogicIntelligence
-from core.config import GEMINI_API_KEY, QUALITY_GATE_THRESHOLD, ENABLE_AUTO_BACKUP
+from core.config import (
+    GEMINI_API_KEY,
+    QUALITY_GATE_THRESHOLD,
+    ENABLE_AUTO_BACKUP,
+    DESCRIPTION_MIN_LENGTH,
+    GITHUB_TOKEN,
+)
 from core.exceptions import ValidationError
 from core.hash_utils import calculate_code_hash
 from core.evaluation.manager import EvaluationManager
@@ -147,8 +153,13 @@ async def do_save_async(
     final_score = eval_res["score"]
     reason = eval_res["reason"]
 
-    import core.config
-    if final_score < core.config.QUALITY_GATE_THRESHOLD:
+    # Final Threshold Logic
+    threshold = QUALITY_GATE_THRESHOLD
+    # Allow drafts to bypass the hard threshold (they will have low reliability scores)
+    if "[AI-DRAFT]" in (description or ""):
+        threshold = 0.0
+        
+    if final_score < threshold:
         logger.warning(
             f"Orchestrator: Quality Gate REJECTED '{name}' (Score: {final_score:.1f}, Reason: {reason})"
         )
@@ -163,21 +174,16 @@ async def do_save_async(
     # Calculate code hash for deduplication
     code_hash = calculate_code_hash(code)
 
-    # Check for unchanged asset
-    existing = await sqlite_storage.get_function_by_name(name, project=project)
-    if existing and existing.get("code_hash") == code_hash:
-        logger.info(
-            f"Orchestrator: Skipping save for '{name}' in project '{project}' (unchanged hash)"
-        )
-        return True
-
     # 3. LLM Metadata Enrichment / Embedding prep
     intel = LogicIntelligence(GEMINI_API_KEY)
 
-    # Enrich description and tags if needed
-    if not description or not tags:
+    # Enrich description and tags ONLY if missing or extremely short
+    if not description or len(description) < DESCRIPTION_MIN_LENGTH:
         enriched = await intel.optimize_metadata(code)
         description = enriched.get("description", description)
+        tags = list(set(tags + enriched.get("tags", [])))
+    elif not tags:
+        enriched = await intel.optimize_metadata(code)
         tags = list(set(tags + enriched.get("tags", [])))
 
     # 6. Generate Embedding for RAG
@@ -226,7 +232,7 @@ async def do_get_async(name: str, project: str = "default") -> Optional[dict[str
 
 
 async def do_search_async(
-    query: str, limit: int = 5, language: Optional[str] = None, project: Optional[str] = None
+    query: str, limit: int = 5, language: Optional[str] = None, project: str = "default"
 ):
     """Asynchronous implementation for searching functions with Query Expansion and Re-ranking."""
     intel = LogicIntelligence(GEMINI_API_KEY)
@@ -254,20 +260,25 @@ async def do_search_async(
     reranked_results = await intel.rerank_results(query, initial_results, limit=limit)
 
     # 3. Fallback: Auto-Draft Generation (Experimental)
-    # Trigger if results are empty or top match is weak (similarity < 0.45)
+    # Trigger ONLY if top match is weak AND it looks like a generation request
     top_score = reranked_results[0].get("similarity", 0) if reranked_results else 0
-    if top_score < 0.45:
+    generation_keywords = ["create", "generate", "make", "implement", "write", "how to"]
+    is_generation_request = any(k in query.lower() for k in generation_keywords)
+    
+    if top_score < 0.45 and is_generation_request:
         logger.info(
-            f"Orchestrator: Weak results (Score: {top_score:.2f}). Triggering Auto-Draft Generator..."
+            f"Orchestrator: Weak results (Score: {top_score:.2f}) and Generation intent detected. Triggering..."
         )
         from core.plugins.draft_generator import DraftGenerator
-
         generator = DraftGenerator(intel)
         draft = await generator.generate_draft(
             query, initial_results, language=language or "python"
         )
         if draft:
-            # Prepend draft to results (or return only draft if requested)
+            # Ensure draft has consistency metadata
+            draft["similarity"] = 0.4
+            draft["project"] = project or "default"
+            # Prepend draft to results
             return [draft] + reranked_results
 
     return reranked_results
