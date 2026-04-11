@@ -1,6 +1,6 @@
 import ast
 from typing import Dict, Any, List
-from src.core.evaluation.base import BaseEvaluator, EvaluationResult
+from ..base import BaseEvaluator, EvaluationResult
 
 
 class DeterministicEvaluator(BaseEvaluator):

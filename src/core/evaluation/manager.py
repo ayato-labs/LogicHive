@@ -24,17 +24,34 @@ class EvaluationManager:
         defined in the .plugins sub-package.
         """
         try:
-            # Import the plugins package
-            package_name = f"{__package__}.plugins"
-            package = importlib.import_module(package_name)
+            # Import the plugins package. Support both package and script execution.
+            package_names = []
+            if __package__:
+                package_names.append(f"{__package__}.plugins")
+            
+            # Absolute fallbacks (depending on PYTHONPATH)
+            package_names.extend(["core.evaluation.plugins", "src.core.evaluation.plugins"])
+            
+            package = None
+            for package_name in package_names:
+                try:
+                    package = importlib.import_module(package_name)
+                    logger.info(f"EvaluationManager: Successfully imported plugins from '{package_name}'")
+                    break
+                except ImportError:
+                    continue
+            
+            if not package:
+                logger.error(f"EvaluationManager: Could not load plugins from any of: {package_names}")
+                return
 
+            # Note: walk_packages only works if the package is correctly initialized
             for loader, name, is_pkg in pkgutil.walk_packages(
                 package.__path__, package.__name__ + "."
             ):
                 module = importlib.import_module(name)
                 for attr_name in dir(module):
                     attr = getattr(module, attr_name)
-                    # Check if it's a class and is a subclass of BaseEvaluator (but not BaseEvaluator itself)
                     if (
                         isinstance(attr, type)
                         and issubclass(attr, BaseEvaluator)
@@ -44,14 +61,14 @@ class EvaluationManager:
                             evaluator_inst = attr()
                             self.evaluators.append(evaluator_inst)
                             logger.info(
-                                f"EvaluationManager: Loaded plugin '{evaluator_inst.name}' from {name}"
+                                f"EvaluationManager: Loaded plugin '{evaluator_inst.name}'"
                             )
                         except Exception as e:
                             logger.error(
-                                f"EvaluationManager: Failed to instantiate {attr_name} from {name}: {e}"
+                                f"EvaluationManager: Failed to instantiate {attr_name}: {e}"
                             )
         except Exception as e:
-            logger.error(f"EvaluationManager: Plugin discovery failed: {e}")
+            logger.error(f"EvaluationManager: Plugin discovery process failed: {e}")
 
     def get_evaluator(self, name: str) -> Optional[BaseEvaluator]:
         """Returns a loaded evaluator by its name."""
