@@ -11,6 +11,7 @@ class ExecutionStatus(Enum):
     SUCCESS = "success"
     FAILURE = "failure"
     TIMEOUT = "timeout"
+    MEMORY_LIMIT = "memory_limit"
     ERROR = "error"
 
 

@@ -22,12 +22,27 @@ class EphemeralPythonExecutor(BaseExecutor):
     def __init__(self):
         self.name = "python"
 
+    def _kill_process_tree(self, pid: int):
+        """Kills a process and all its children cross-platform."""
+        import psutil
+        try:
+            parent = psutil.Process(pid)
+            for child in parent.children(recursive=True):
+                try:
+                    child.kill()
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+            parent.kill()
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+
     async def execute(
         self,
         code: str,
         test_code: str = "",
         dependencies: Optional[List[str]] = None,
         timeout: int = 20,
+        memory_limit_mb: int = 256,
         **kwargs,
     ) -> ExecutionResult:
         start_time = time.time()
@@ -43,15 +58,11 @@ class EphemeralPythonExecutor(BaseExecutor):
             # Write the actual solution code
             script_file.write_text(code, encoding="utf-8")
 
-            # Create Harness (combines code and test_code, with JSON result export)
-            # This harness prevents stdout contamination by using a dedicated result file for results.
+            # Create Harness
             harness_content = self._generate_harness(code, test_code, result_file)
             harness_file.write_text(harness_content, encoding="utf-8")
 
             # 2. Build uv run command
-            # Syntax: uv run --with dep1 --with dep2 python harness.py
-            # --offline: Block network access for security
-            # --no-project: Prevent discovery of the current project's configuration
             cmd = ["uv", "run", "--quiet", "--offline", "--no-project"]
             for dep in dependencies:
                 cmd.extend(["--with", dep])
@@ -63,8 +74,9 @@ class EphemeralPythonExecutor(BaseExecutor):
                 if k in ["PATH", "SYSTEMROOT", "SystemDrive", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP", "USERNAME"]
             }
             process_env["PYTHONPATH"] = ""
-            process_env["PYTHONNOUSERSITE"] = "1" # Block user-level site-packages
+            process_env["PYTHONNOUSERSITE"] = "1"
             
+            memory_exceeded = False
             try:
                 process = await asyncio.create_subprocess_exec(
                     *cmd,
@@ -74,6 +86,31 @@ class EphemeralPythonExecutor(BaseExecutor):
                     env=process_env,
                 )
 
+                async def monitor_resources():
+                    nonlocal memory_exceeded
+                    import psutil
+                    while process.returncode is None:
+                        try:
+                            parent = psutil.Process(process.pid)
+                            # Sum up memory of parent and all recursive children
+                            total_mem = parent.memory_info().rss
+                            for child in parent.children(recursive=True):
+                                try:
+                                    total_mem += child.memory_info().rss
+                                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                                    continue
+                            
+                            if (total_mem / 1024 / 1024) > memory_limit_mb:
+                                logger.warning(f"Executor: Memory limit exceeded ({total_mem / 1024 / 1024:.1f}MB > {memory_limit_mb}MB). Killing process tree.")
+                                memory_exceeded = True
+                                self._kill_process_tree(process.pid)
+                                break
+                        except (psutil.NoSuchProcess, psutil.AccessDenied):
+                            break
+                        await asyncio.sleep(0.2)
+
+                monitor_task = asyncio.create_task(monitor_resources())
+                
                 try:
                     stdout_bytes, stderr_bytes = await asyncio.wait_for(
                         process.communicate(), timeout=timeout
@@ -81,26 +118,20 @@ class EphemeralPythonExecutor(BaseExecutor):
                     stdout = stdout_bytes.decode("utf-8", errors="replace")
                     stderr = stderr_bytes.decode("utf-8", errors="replace")
                 except asyncio.TimeoutError:
-                    if process:
-                        try:
-                            # Use psutil for cross-platform recursive tree killing
-                            import psutil
-                            try:
-                                parent = psutil.Process(process.pid)
-                                for child in parent.children(recursive=True):
-                                    try:
-                                        child.kill()
-                                    except (psutil.NoSuchProcess, psutil.AccessDenied):
-                                        pass
-                                parent.kill()
-                            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                                pass
-                            await process.wait()
-                        except Exception as e:
-                            logger.warning(f"Executor: Failed to kill process tree: {e}")
+                    self._kill_process_tree(process.pid)
+                    await process.wait()
                     return ExecutionResult(
                         status=ExecutionStatus.TIMEOUT,
                         logs=ExecutionLogs(stderr="Execution timed out."),
+                        duration=time.time() - start_time,
+                    )
+                finally:
+                    monitor_task.cancel()
+
+                if memory_exceeded:
+                    return ExecutionResult(
+                        status=ExecutionStatus.MEMORY_LIMIT,
+                        logs=ExecutionLogs(stderr=f"Memory limit exceeded ({memory_limit_mb}MB)."),
                         duration=time.time() - start_time,
                     )
 
