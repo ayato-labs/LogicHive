@@ -118,47 +118,56 @@ class EvaluationManager:
             else:
                 results[name] = res
 
-        # 3. Final Scoring Logic (Refined weighted logic)
+        # 3. Final Scoring Logic (Hybrid Architecture: Fact over Opinion)
         final_score = 0.0
         reasons = []
 
         ai_res = results.get("ai_gate")
+        det_res = results.get("deterministic")
         python_static_res = results.get("python_static")
         ruff_res = results.get("ruff")
         eslint_res = results.get("eslint")
         runtime_res = results.get("runtime")
 
         # 4. Weighted Calculation
-        # Weights: AI (30%), Static/Ruff (30%), Runtime (40%)
+        # NEW Weights: Deterministic (40%), Runtime (30%), AI (20%), Static (10%)
         parts = []
         
-        # AI Gate (30%)
-        if ai_res:
-            parts.append((ai_res.score, 0.30, f"AI/Rigor: {ai_res.reason}"))
+        # A. Deterministic Layer (40%) - THE TRUTH FOUNDATION
+        if det_res:
+            det_score = det_res.score
+            # HARD BLOCK: If facts say 0 (no assertions or hollow), no opinion can save it.
+            if det_score == 0:
+                return {
+                    "score": 0.0,
+                    "reason": f"DETERMINISTIC REJECTION: {det_res.reason}",
+                    "details": {k: {"score": v.score, "reason": v.reason} for k, v in results.items()},
+                }
+            parts.append((det_score, 0.40, f"Facts: {det_res.reason}"))
             
-        # Static Analysis (30%)
-        if lang == "python":
-            if ruff_res and ruff_res.score < 100:
-                parts.append((ruff_res.score, 0.30, f"Ruff: {ruff_res.reason}"))
-            elif python_static_res:
-                parts.append((python_static_res.score, 0.30, f"Static: {python_static_res.reason}"))
-        elif eslint_res:
-            parts.append((eslint_res.score, 0.30, f"ESLint: {eslint_res.reason}"))
-
-        # Runtime Verification (40%) - THE MOST CRITICAL
+        # B. Runtime Verification (30%)
         if runtime_res:
             runtime_score = runtime_res.score
-            
-            # HARD BLOCK: If it's NOT a draft and tests fail with logic error (score 0), 
-            # we force final score to 0 to trigger researcher's logic.
             if runtime_score == 0 and not is_draft:
                 return {
                     "score": 0.0,
                     "reason": f"Critical Logic Failure (Verified Asset): {runtime_res.reason}",
                     "details": {k: {"score": v.score, "reason": v.reason} for k, v in results.items()},
                 }
-                
-            parts.append((runtime_score, 0.40, f"Runtime: {runtime_res.reason}"))
+            parts.append((runtime_score, 0.30, f"Runtime: {runtime_res.reason}"))
+
+        # C. AI Gate (20%) - THE AUDITOR'S OPINION
+        if ai_res:
+            parts.append((ai_res.score, 0.20, f"AI Opinion: {ai_res.reason}"))
+            
+        # D. Static Analysis (10%)
+        if lang == "python":
+            if ruff_res and ruff_res.score < 100:
+                parts.append((ruff_res.score, 0.10, f"Ruff: {ruff_res.reason}"))
+            elif python_static_res:
+                parts.append((python_static_res.score, 0.10, f"Static: {python_static_res.reason}"))
+        elif eslint_res:
+            parts.append((eslint_res.score, 0.10, f"ESLint: {eslint_res.reason}"))
 
         # Normalized weight calculation
         total_weight = sum(p[1] for p in parts)
@@ -168,20 +177,14 @@ class EvaluationManager:
                 raw_final += score * (weight / total_weight)
                 reasons.append(reason)
             
-            # ABSOLUTE RIGOR ENFORCEMENT:
+            # ABSOLUTE RIGOR ENFORCEMENT (Veto Layer):
             if ai_res:
                 ai_score = ai_res.score
-                
-                # 1. KILL-SWITCH: If AI identifies 'Quality Theater' or 'Hollow Logic' (Score < 30)
                 if ai_score < 30:
                     final_score = 0.0
-                    reasons.insert(0, "CRITICAL REJECTION: AI Forensic Auditor identified 'Quality Theater' or Hollow Logic. Asset discarded.")
-                
-                # 2. VETO POWER: If AI score is below 70, the overall asset CANNOT be 'Verified'.
-                # We cap the final score at the AI score to prevent 'Sophistry' by averaging.
+                    reasons.insert(0, "VETO: AI Auditor identified 'Quality Theater' - Opinion confirmed rejection.")
                 elif ai_score < 70:
                     final_score = min(raw_final, ai_score)
-                    reasons.insert(0, f"VETO: AI Auditor expressed doubt about asset rigor (Score: {ai_score}). Overall score capped.")
                 else:
                     final_score = raw_final
             else:
