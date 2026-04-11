@@ -1,10 +1,20 @@
 # 🏗️ LogicHive System Architecture
 
-LogicHive is designed as a **Logic Orchestration Layer** that sits between high-intelligence AI Agents and persistent storage. Its primary goal is to solve the "Logic Rot" and "Memory Fragmentation" problems inherent in current RAG-based AI workflows.
+LogicHive is a **Logic Orchestration Layer** that sits between high-intelligence AI Agents and persistent storage. Its primary goal is to solve "Logic Rot" and "Memory Fragmentation" through structural rigor.
 
-## 1. High-Level Overview
+---
 
-LogicHive follows a "Post-RAG Paradigm" where the unit of retrieval is not a document, but a **Verified Logic Unit (VLU)**.
+## 🛡️ The Philosophy: Logic over Sophistry
+
+In an AI-augmented world, the cost of code generation is near zero, but the cost of **validation** is at an all-time high. LogicHive is built on the belief that **AI is a fantastic adapter, but a dangerous judge.** 
+
+We prioritize **Facts (AST, Runtime)** over **Opinions (LLM heurustics)**.
+
+---
+
+## 1. High-Level Architecture
+
+LogicHive follows a "Post-RAG Paradigm" where the unit of retrieval is a **Verified Logic Unit (VLU)**.
 
 ```mermaid
 graph TD
@@ -38,9 +48,29 @@ graph TD
 
 ---
 
-## 2. The Validation Pipeline (Rigor Gate)
+## 2. Evolution of the Quality Gate (The War Story)
 
-LogicHive implements a **Deterministic Veto** policy. Unlike naive AI-only evaluation, LogicHive enforces structural rigor before accepting "subjective" AI opinions.
+The current 4:3:2:1 weighted gate is the result of three distinct "Failures" during the development of LogicHive. These rounds prove why a "Deterministic Veto" is necessary.
+
+### Round 1: Naive Trust (AI-only)
+- **Attempt**: Asked the AI, "Is this code high quality and well-tested?"
+- **Fail**: The AI rewarded code with `assert True` or no assertions at all, as long as the code *looked* clean and professional.
+- **Lesson**: AI cannot distinguish between "Pro-looking comments" and "Rigorous logic."
+
+### Round 2: Persona Hardening (Forensic Auditor)
+- **Attempt**: Changed the AI persona to a "Hostile Forensic Auditor" and gave it "Veto Power."
+- **Fail**: The AI was fooled by "Complex Deceptions"—code that uses bitwise operators or meta-programming to perform simple identity functions. The AI thought it was "sophisticated engineering."
+- **Lesson**: AI-only evaluation is subjective and non-deterministic. It generates **Sophistry**, not Logic.
+
+### Round 3: Hybrid Deterministic Veto (Current)
+- **Solution**: Introduced the **Deterministic Layer**. We use Python's `ast` module to:
+  1. Count actual `assert` statements.
+  2. Detect "Hollow Methods" (methods with only `pass`, `...`, or trivial identity returns).
+- **Outcome**: If the Deterministic Layer finds **zero assertions**, the asset is REJECTED instantly, regardless of how much the AI "likes" it.
+
+---
+
+## 3. The Validation Pipeline
 
 ```mermaid
 sequenceDiagram
@@ -51,16 +81,16 @@ sequenceDiagram
     participant Vault as Logic Vault
 
     Agent->>Orch: save_function(code, test_code)
-    Orch->>Det: Audit Structural Rigor
-    Note over Det: AST Analysis: check assertions & hollow logic
+    Orch->>Det: Audit Structural Rigor (Fact)
+    Note over Det: AST Check: No Assertions? 
     
-    alt is_hollow OR assertion_count == 0
-        Det-->>Orch: Score 0 (REJECT)
-        Orch-->>Agent: Fail: "Deterministic Rejection"
+    alt Deterministic Fail
+        Det-->>Orch: Score 0 (VETO)
+        Orch-->>Agent: Fail: "Rigor Gate Rejection"
     else Rigor Passed
-        Det-->>Orch: Base Score (e.g. 100)
-        Orch->>AI: Holistic Review
-        AI-->>Orch: Weighted Opinion
+        Det-->>Orch: Fact-based Score
+        Orch->>AI: Holistic Review (Opinion)
+        AI-->>Orch: Reliability Analysis
         Orch->>Vault: Persist with [reliability_score]
         Vault-->>Agent: Success: Logic Promoted
     end
@@ -68,23 +98,19 @@ sequenceDiagram
 
 ---
 
-## 3. Core Design Philosophies
+## 4. Design Philosophies: "Giving Up to Seek More"
 
-### A. Facts over Opinions
-We believe LLM evaluations are non-deterministic and can be prone to "Sophistry" (sounding correct but lacking substance). LogicHive uses **AST (Abstract Syntax Tree)** parsing to prove that:
-- Tests actually exist (Assertion count).
-- Code is not performative (Hollow method detection).
+To build a professional-grade vault, we explicitly "Gave Up" on certain common expectations:
 
-### B. Anti-Rot (Software Preservation)
-Logic is a living asset. LogicHive includes background audit tools (`stabilize_vault.py`) that periodically re-verify assets against shifting runtime environments.
-
-### C. Contextual Isolation
-Multi-tenant security is built-in. Project metadata ensures that proprietary logic from Project A never leaks into the suggestion context of Project B, even within the same vector space.
+1. **Giving up on "AI Omniscience"**: We don't expect AI toExtract metadata perfectly. Instead, we let the Agent (Cursor/Antigravity) do the heavy lifting of interpretation.
+2. **Giving up on "Visual Excellence" for internals**: The CLI and MCP are the primary UI. We prioritize internal structural integrity over dashboard graphics.
+3. **Giving up on "Zero-tests"**: Prototyping is fine (Draft mode), but we give up the idea that "Untested code is an asset." In LogicHive, it's a liability.
 
 ---
 
-## 🚀 Future Vision: Auto-Dev Factory
-LogicHive is evolving from a storage hub to a **Self-Optimizing Factory**.
-1. **Discovery**: Find legacy logic.
-2. **Adaptation**: Auto-refactor unit to match current project context.
-3. **Professionalization**: Auto-generate missing tests to promote logic to "Verified" status.
+## 🚀 The Synergy: LogicHive + SharedMemoryServer
+While **SharedMemoryServer** provides the "Contextual Reasoning Memory" (the *Who* and *Why*), **LogicHive** provides the "Verified Logic Atoms" (the *How*). 
+
+Together, they form a complete Agentic Infrastructure:
+- **SharedMemory**: Facts & Narrative.
+- **LogicHive**: Code & Verification.
