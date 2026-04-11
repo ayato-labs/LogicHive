@@ -2,9 +2,9 @@ import pytest
 import os
 
 # Set environment variables for testing BEFORE any imports
-os.environ["SQLITE_DB_PATH"] = "test_logichive.db"
-os.environ["FAISS_INDEX_PATH"] = "test_faiss_index.bin"
-os.environ["FAISS_MAPPING_PATH"] = "test_faiss_mapping.json"
+os.environ["SQLITE_DB_PATH"] = os.path.join("storage", "data", "test", "test_logichive.db")
+os.environ["FAISS_INDEX_PATH"] = os.path.join("storage", "data", "test", "test_faiss_index.bin")
+os.environ["FAISS_MAPPING_PATH"] = os.path.join("storage", "data", "test", "test_faiss_mapping.json")
 
 # Add src to sys.path
 import sys
