@@ -367,19 +367,47 @@ class SqliteStorage:
             )
             return None
 
-    async def get_all_functions(self) -> List[Dict[str, Any]]:
+    async def get_functions(
+        self, project: str = None, tags: List[str] = None, limit: int = 50
+    ) -> List[Dict[str, Any]]:
+        """
+        Flexible listing of functions with optional project and tag filtering.
+        """
         try:
             db = await get_db_connection()
-            db.row_factory = lambda cursor, row: dict(
-                zip([col[0] for col in cursor.description], row)
-            )
-            async with db.execute("SELECT * FROM logichive_functions") as cursor:
+            db.row_factory = aiosqlite.Row
+            conditions = []
+            params = []
+
+            if project:
+                conditions.append("project = ?")
+                params.append(project)
+
+            if tags:
+                for tag in tags:
+                    conditions.append(
+                        "EXISTS (SELECT 1 FROM json_each(tags) WHERE LOWER(value) = LOWER(?))"
+                    )
+                    params.append(tag)
+
+            where_clause = ""
+            if conditions:
+                where_clause = " WHERE " + " AND ".join(conditions)
+
+            sql = f"SELECT * FROM logichive_functions{where_clause} ORDER BY updated_at DESC LIMIT ?"
+            params.append(limit)
+
+            async with db.execute(sql, params) as cursor:
                 rows = await cursor.fetchall()
             await db.close()
-            return [self._process_row(row) for row in rows]
+            return [self._process_row(dict(row)) for row in rows]
         except Exception as e:
-            logger.error(f"SQLite: Failed to list all functions: {e}")
-            raise StorageError(f"Failed to list all functions: {e}")
+            logger.error(f"SQLite: Failed to list functions: {e}")
+            raise StorageError(f"Failed to list functions: {e}")
+
+    async def get_all_functions(self) -> List[Dict[str, Any]]:
+        """Backwards compatibility wrapper."""
+        return await self.get_functions(limit=1000)
 
     @retry_on_db_lock()
     @with_write_lock

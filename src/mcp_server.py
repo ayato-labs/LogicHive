@@ -183,5 +183,37 @@ async def delete_function(name: str, project: str = "default") -> str:
         return f"Failed to delete function '{name}' in project '{project}'."
 
 
+@mcp.tool()
+async def list_functions(
+    project: str = None, tags: list[str] = None, limit: int = 50
+) -> str:
+    """
+    List high-quality code functions with optional filtering by project and tags.
+    Use this to browse available assets when search_functions is too specific.
+
+    Args:
+        project: Optional project name to filter by.
+        tags: Optional list of tags to filter by.
+        limit: Max results. Default 50.
+    """
+    results = await orchestrator.do_list_async(project=project, tags=tags, limit=limit)
+    if not results:
+        return "No functions found in the vault."
+
+    md = "### Vault Assets\n\n"
+    for res in results:
+        name = res["name"]
+        project_name = res.get("project", "default")
+        desc = res.get("description", "No description")
+        tags_str = ", ".join(res.get("tags", []))
+        rel = res.get("reliability_score", 0) * 100
+
+        md += f"- **{name}** (Project: {project_name}, Reliability: {rel:.1f}%)\n"
+        md += f"  - *{desc}*\n"
+        md += f"  - Tags: {tags_str}\n"
+
+    return md
+
+
 if __name__ == "__main__":
     mcp.run()

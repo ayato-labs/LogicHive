@@ -284,4 +284,11 @@ async def do_search_async(
     return reranked_results
 
 
+async def do_list_async(
+    project: Optional[str] = None, tags: Optional[list[str]] = None, limit: int = 50
+) -> list[dict[str, Any]]:
+    """Lists functions with optional filtering."""
+    return await sqlite_storage.get_functions(project=project, tags=tags, limit=limit)
+
+
 # --- End of Orchestrator ---
