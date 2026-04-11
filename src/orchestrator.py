@@ -156,7 +156,8 @@ async def do_save_async(
     # Final Threshold Logic
     threshold = QUALITY_GATE_THRESHOLD
     # Allow drafts to bypass the hard threshold (they will have low reliability scores)
-    if "[AI-DRAFT]" in (description or ""):
+    desc_upper = (description or "").upper()
+    if "[AI-DRAFT]" in desc_upper or "DRAFT" in desc_upper or "[AI_DRAFT]" in desc_upper:
         threshold = 0.0
         
     if final_score < threshold:

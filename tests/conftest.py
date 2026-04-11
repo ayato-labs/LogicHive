@@ -28,7 +28,7 @@ class FakeLogicIntelligence:
         val = (h % 1000) / 1000.0
         return [val] * 768
 
-    async def evaluate_quality(self, code: str):
+    async def evaluate_quality(self, code: str, **kwargs):
         # Basic heuristic for "good" vs "bad" code for testing
         if len(code) < 10 or "error" in code.lower():
             return {"score": 10, "reason": "Fake: Code too short or contains 'error'"}

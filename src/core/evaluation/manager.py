@@ -1,7 +1,10 @@
 import logging
 import asyncio
 import importlib
+import importlib.util
 import pkgutil
+import os
+import sys
 from typing import List, Dict, Any, Optional
 from .base import BaseEvaluator, EvaluationResult
 
@@ -20,36 +23,55 @@ class EvaluationManager:
 
     def _load_plugins(self):
         """
-        Dynamically discovers and instantiates all BaseEvaluator subclasses
-        defined in the .plugins sub-package.
+        Dynamically discovers and instantiates all BaseEvaluator subclasses.
+        Uses both package-based and filesystem-based discovery for maximum reliability.
         """
         try:
-            # Import the plugins package. Support both package and script execution.
-            package_names = []
-            if __package__:
-                package_names.append(f"{__package__}.plugins")
-            
-            # Absolute fallbacks (depending on PYTHONPATH)
-            package_names.extend(["core.evaluation.plugins", "src.core.evaluation.plugins"])
-            
-            package = None
-            for package_name in package_names:
-                try:
-                    package = importlib.import_module(package_name)
-                    logger.info(f"EvaluationManager: Successfully imported plugins from '{package_name}'")
-                    break
-                except ImportError:
-                    continue
-            
-            if not package:
-                logger.error(f"EvaluationManager: Could not load plugins from any of: {package_names}")
+            plugins_dir = os.path.join(os.path.dirname(__file__), "plugins")
+            if not os.path.exists(plugins_dir):
+                logger.error(f"EvaluationManager: Plugins directory not found at {plugins_dir}")
                 return
 
-            # Note: walk_packages only works if the package is correctly initialized
-            for loader, name, is_pkg in pkgutil.walk_packages(
-                package.__path__, package.__name__ + "."
-            ):
-                module = importlib.import_module(name)
+            # Collect all potential module candidates
+            modules = []
+            
+            # 1. Try package-based discovery (cleanest)
+            package_names = [
+                f"{__package__}.plugins" if __package__ else None,
+                "core.evaluation.plugins",
+                "src.core.evaluation.plugins"
+            ]
+            
+            for pkg_name in [p for p in package_names if p]:
+                try:
+                    pkg = importlib.import_module(pkg_name)
+                    for loader, name, is_pkg in pkgutil.walk_packages(pkg.__path__, pkg.__name__ + "."):
+                        try:
+                            modules.append(importlib.import_module(name))
+                        except ImportError:
+                            continue
+                    if modules:
+                        break # Successfully loaded via package
+                except ImportError:
+                    continue
+
+            # 2. Filesystem fallback if package discovery didn't find everything
+            if not modules:
+                for filename in os.listdir(plugins_dir):
+                    if filename.endswith(".py") and filename != "__init__.py":
+                        module_name = filename[:-3]
+                        file_path = os.path.join(plugins_dir, filename)
+                        try:
+                            spec = importlib.util.spec_from_file_location(module_name, file_path)
+                            if spec and spec.loader:
+                                mod = importlib.util.module_from_spec(spec)
+                                spec.loader.exec_module(mod)
+                                modules.append(mod)
+                        except Exception as e:
+                            logger.error(f"EvaluationManager: Failed to load {filename} via fallback: {e}")
+
+            # 3. Instantiate evaluators from discovered modules
+            for module in modules:
                 for attr_name in dir(module):
                     attr = getattr(module, attr_name)
                     if (
@@ -58,15 +80,13 @@ class EvaluationManager:
                         and attr is not BaseEvaluator
                     ):
                         try:
-                            evaluator_inst = attr()
-                            self.evaluators.append(evaluator_inst)
-                            logger.info(
-                                f"EvaluationManager: Loaded plugin '{evaluator_inst.name}'"
-                            )
+                            inst = attr()
+                            if not any(e.name == inst.name for e in self.evaluators):
+                                self.evaluators.append(inst)
+                                logger.info(f"EvaluationManager: Loaded plugin '{inst.name}'")
                         except Exception as e:
-                            logger.error(
-                                f"EvaluationManager: Failed to instantiate {attr_name}: {e}"
-                            )
+                            logger.error(f"EvaluationManager: Failed to instantiate {attr_name}: {e}")
+
         except Exception as e:
             logger.error(f"EvaluationManager: Plugin discovery process failed: {e}")
 
@@ -86,7 +106,14 @@ class EvaluationManager:
         test_code = kwargs.get("test_code", "")
         
         # 0. Strict check for non-draft assets
-        is_draft = "[AI_DRAFT]" in (kwargs.get("description", "") or "") or "[AI-DRAFT]" in (kwargs.get("description", "") or "")
+        desc = (kwargs.get("description") or "").upper()
+        # Support both flag and description keywords (DRAFT, AI_DRAFT, AI-DRAFT)
+        is_draft = (
+            kwargs.get("is_draft", False) 
+            or "DRAFT" in desc 
+            or "AI_DRAFT" in desc 
+            or "AI-DRAFT" in desc
+        )
         
         # If it's not a draft and has NO test code, it's a 'Sophistry' attempt or incomplete asset.
         if not is_draft and not test_code:
@@ -179,7 +206,8 @@ class EvaluationManager:
             
         # D. Static Analysis (10%)
         if lang == "python":
-            if ruff_res and ruff_res.score < 100:
+            # Prioritize Ruff if available
+            if ruff_res:
                 parts.append((ruff_res.score, 0.10, f"Ruff: {ruff_res.reason}"))
             elif python_static_res:
                 parts.append((python_static_res.score, 0.10, f"Static: {python_static_res.reason}"))
