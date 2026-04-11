@@ -1,7 +1,7 @@
-import logging
 import importlib
+import logging
 import pkgutil
-from typing import Dict, Optional
+
 from .base import BaseExecutor
 
 logger = logging.getLogger(__name__)
@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 class ExecutorFactory:
     """Registry and factory for code executors with dynamic loading."""
 
-    _executors: Dict[str, BaseExecutor] = {}
+    _executors: dict[str, BaseExecutor] = {}
     _loaded = False
 
     @classmethod
@@ -18,12 +18,12 @@ class ExecutorFactory:
         """Dynamically discovers and loads all executor plugins in the current package."""
         if cls._loaded:
             return
-        
+
         try:
             # Package is src.core.execution
             package_name = __package__
             package = importlib.import_module(package_name)
-            
+
             for loader, name, is_pkg in pkgutil.walk_packages(
                 package.__path__, package.__name__ + "."
             ):
@@ -44,6 +44,6 @@ class ExecutorFactory:
         logger.debug(f"ExecutorFactory: Registered executor for {language}")
 
     @classmethod
-    def get_executor(cls, language: str) -> Optional[BaseExecutor]:
+    def get_executor(cls, language: str) -> BaseExecutor | None:
         cls._load_plugins()
         return cls._executors.get(language.lower())

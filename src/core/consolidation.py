@@ -1,16 +1,17 @@
-import logging
 import json
-from typing import List, Optional, Dict, Any
+import logging
+from typing import Any
+
 import httpx
 from google import genai
 from google.genai import types
 
 from core.config import (
-    MODEL_TYPE,
-    GEMINI_API_KEY,
-    OLLAMA_URL,
-    OLLAMA_MODEL,
     EMBEDDING_MODEL_ID,
+    GEMINI_API_KEY,
+    MODEL_TYPE,
+    OLLAMA_MODEL,
+    OLLAMA_URL,
     VECTOR_DIMENSION,
 )
 from core.exceptions import AIProviderError
@@ -31,7 +32,7 @@ class LogicIntelligence:
             return "gemini"
         return self.provider
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str | None = None):
         self.provider = MODEL_TYPE.lower()
         self.gemini_key = api_key or GEMINI_API_KEY
         self.embedding_model = EMBEDDING_MODEL_ID
@@ -59,7 +60,7 @@ class LogicIntelligence:
         self.ollama_url = OLLAMA_URL
         self.ollama_model = OLLAMA_MODEL
 
-    async def generate_embedding(self, text: str) -> List[float]:
+    async def generate_embedding(self, text: str) -> list[float]:
         """
         Generates embedding for the given text.
         NOTE: Per system architecture, this project uses gemini-embedding-001 exclusively.
@@ -165,7 +166,7 @@ class LogicIntelligence:
 
         raise AIProviderError("No valid AI provider available.")
 
-    async def evaluate_quality(self, code: str, test_code: str = "") -> Dict[str, Any]:
+    async def evaluate_quality(self, code: str, test_code: str = "") -> dict[str, Any]:
         """
         Evaluates the quality of assets through the lens of a Forensic Auditor.
         LogicHive's "Absolute Logic Gate" detects and rejects 'Quality Theater'.
@@ -239,7 +240,7 @@ class LogicIntelligence:
         expanded = await self._call_llm_async(prompt, use_json=False)
         return expanded or user_query
 
-    async def optimize_metadata(self, code: str) -> Dict[str, Any]:
+    async def optimize_metadata(self, code: str) -> dict[str, Any]:
         """
         Generates optimized technical description and tags for a code asset.
         """
@@ -265,8 +266,8 @@ class LogicIntelligence:
         }
 
     async def rerank_results(
-        self, query: str, results: List[Dict[str, Any]], limit: int = 5
-    ) -> List[Dict[str, Any]]:
+        self, query: str, results: list[dict[str, Any]], limit: int = 5
+    ) -> list[dict[str, Any]]:
         """
         Re-ranks search results using LLM reasoning to ensure the most relevant code is first.
         """
@@ -331,7 +332,7 @@ class LogicIntelligence:
         return results[:limit]
 
     def construct_search_document(
-        self, name: str, description: str, tags: List[str], code: str
+        self, name: str, description: str, tags: list[str], code: str
     ) -> str:
         """
         Constructs a structured document for embedding to maximize RAG relevance.

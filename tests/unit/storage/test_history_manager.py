@@ -1,6 +1,8 @@
-import pytest
 import aiosqlite
+import pytest
+
 from storage.history_manager import HistoryManager
+
 
 @pytest.mark.asyncio
 async def test_archive_version_preserves_project():
@@ -9,7 +11,7 @@ async def test_archive_version_preserves_project():
     Verifies that the project field is correctly stored in the history table.
     """
     manager = HistoryManager()
-    
+
     # Setup in-memory DB for pure unit test
     async with aiosqlite.connect(":memory:") as db:
         # Create history table
@@ -30,7 +32,7 @@ async def test_archive_version_preserves_project():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        
+
         existing_row = {
             "id": "123",
             "project": "secret-project",
@@ -42,9 +44,9 @@ async def test_archive_version_preserves_project():
             "version": 1,
             "code_hash": "abc"
         }
-        
+
         await manager.archive_version(db, existing_row)
-        
+
         # Verify
         async with db.execute("SELECT project FROM logichive_function_history") as cursor:
             row = await cursor.fetchone()

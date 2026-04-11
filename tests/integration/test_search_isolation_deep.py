@@ -1,5 +1,7 @@
 import pytest
+
 from storage.sqlite_api import sqlite_storage
+
 
 @pytest.mark.asyncio
 async def test_search_isolation_shadowing_prevention(test_db, fake_intel):
@@ -25,7 +27,7 @@ async def test_search_isolation_shadowing_prevention(test_db, fake_intel):
             "embedding": emb,
             "code_hash": f"hash_a_{i}"
         })
-        
+
     # 2. Setup Project B (Target)
     target_code = "def target_add(a, b): return a + b"
     target_desc = "Specific Math function for Project B"
@@ -40,14 +42,14 @@ async def test_search_isolation_shadowing_prevention(test_db, fake_intel):
         "embedding": emb_target,
         "code_hash": "hash_b"
     })
-    
+
     # 3. Search Project B
     results = await sqlite_storage.find_similar_functions(
         embedding=emb_target,
         project="ProjectB",
         limit=5
     )
-    
+
     # Check results
     assert len(results) > 0, "Should have found the function in Project B"
     assert results[0]["name"] == "math_func_b"

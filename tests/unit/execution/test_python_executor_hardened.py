@@ -1,10 +1,13 @@
-import pytest
 import asyncio
-import psutil
-import sys
 import subprocess
-from core.execution.python import EphemeralPythonExecutor
+import sys
+
+import psutil
+import pytest
+
 from core.execution.base import ExecutionStatus
+from core.execution.python import EphemeralPythonExecutor
+
 
 @pytest.fixture
 def executor():
@@ -24,17 +27,17 @@ async def test_kill_process_tree_unit(executor):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE
     )
-    
+
     pid = proc.pid
     p = psutil.Process(pid)
     await asyncio.sleep(0.5) # Wait for child to spawn
-    
+
     children = p.children(recursive=True)
     assert len(children) >= 1
-    
+
     # Kill tree
     executor._kill_process_tree(pid)
-    
+
     # Verify all dead
     await asyncio.sleep(0.2)
     assert not p.is_running()
@@ -56,7 +59,7 @@ time.sleep(2) # Keep it alive long enough for monitor
 """
     # Limit to 50MB
     result = await executor.execute(code, memory_limit_mb=50, timeout=10)
-    
+
     assert result.status == ExecutionStatus.MEMORY_LIMIT
     assert "Memory limit exceeded" in result.logs.stderr
 
@@ -65,6 +68,6 @@ async def test_timeout_monitor_trigger(executor):
     """Verifies timeout triggers status."""
     code = "import time; time.sleep(10)"
     result = await executor.execute(code, timeout=1)
-    
+
     assert result.status == ExecutionStatus.TIMEOUT
 

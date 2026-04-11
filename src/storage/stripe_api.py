@@ -1,6 +1,8 @@
-import stripe
 import logging
-from typing import Optional, Dict, Any
+from typing import Any
+
+import stripe
+
 from core.config import get_setting
 
 # Load Stripe Key from Config
@@ -28,7 +30,7 @@ class StripeBilling:
                 "Stripe: API Key missing. Billing features will be disabled."
             )
 
-    def create_customer(self, org_name: str, org_id: str) -> Optional[str]:
+    def create_customer(self, org_name: str, org_id: str) -> str | None:
         """
         Creates a Stripe customer for an organization.
         """
@@ -41,7 +43,7 @@ class StripeBilling:
             logger.error(f"Stripe: Failed to create customer: {e}")
             return None
 
-    def get_subscription_status(self, stripe_customer_id: str) -> Dict[str, Any]:
+    def get_subscription_status(self, stripe_customer_id: str) -> dict[str, Any]:
         """
         Retrieves active subscription details.
         """

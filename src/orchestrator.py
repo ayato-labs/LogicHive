@@ -1,21 +1,21 @@
-import logging
 import ast
-import re
 import asyncio
-from typing import Any, Optional
+import logging
+import re
+from typing import Any
 
-from storage.sqlite_api import sqlite_storage
-from core.consolidation import LogicIntelligence
 from core.config import (
-    GEMINI_API_KEY,
-    QUALITY_GATE_THRESHOLD,
-    ENABLE_AUTO_BACKUP,
     DESCRIPTION_MIN_LENGTH,
+    ENABLE_AUTO_BACKUP,
+    GEMINI_API_KEY,
     GITHUB_TOKEN,
+    QUALITY_GATE_THRESHOLD,
 )
+from core.consolidation import LogicIntelligence
+from core.evaluation.manager import EvaluationManager
 from core.exceptions import ValidationError
 from core.hash_utils import calculate_code_hash
-from core.evaluation.manager import EvaluationManager
+from storage.sqlite_api import sqlite_storage
 from storage.vector_store import vector_manager
 
 logger = logging.getLogger(__name__)
@@ -159,7 +159,7 @@ async def do_save_async(
     desc_upper = (description or "").upper()
     if "[AI-DRAFT]" in desc_upper or "DRAFT" in desc_upper or "[AI_DRAFT]" in desc_upper:
         threshold = 0.0
-        
+
     if final_score < threshold:
         logger.warning(
             f"Orchestrator: Quality Gate REJECTED '{name}' (Score: {final_score:.1f}, Reason: {reason})"
@@ -227,13 +227,13 @@ async def do_save_async(
     return save_result
 
 
-async def do_get_async(name: str, project: str = "default") -> Optional[dict[str, Any]]:
+async def do_get_async(name: str, project: str = "default") -> dict[str, Any] | None:
     """Asynchronous implementation for getting a function."""
     return await sqlite_storage.get_function_by_name(name, project=project)
 
 
 async def do_search_async(
-    query: str, limit: int = 5, language: Optional[str] = None, project: str = "default"
+    query: str, limit: int = 5, language: str | None = None, project: str = "default"
 ):
     """Asynchronous implementation for searching functions with Query Expansion and Re-ranking."""
     intel = LogicIntelligence(GEMINI_API_KEY)
@@ -265,7 +265,7 @@ async def do_search_async(
     top_score = reranked_results[0].get("similarity", 0) if reranked_results else 0
     generation_keywords = ["create", "generate", "make", "implement", "write", "how to"]
     is_generation_request = any(k in query.lower() for k in generation_keywords)
-    
+
     if top_score < 0.45 and is_generation_request:
         logger.info(
             f"Orchestrator: Weak results (Score: {top_score:.2f}) and Generation intent detected. Triggering..."
@@ -286,7 +286,7 @@ async def do_search_async(
 
 
 async def do_list_async(
-    project: Optional[str] = None, tags: Optional[list[str]] = None, limit: int = 50
+    project: str | None = None, tags: list[str] | None = None, limit: int = 50
 ) -> list[dict[str, Any]]:
     """Lists functions with optional filtering."""
     return await sqlite_storage.get_functions(project=project, tags=tags, limit=limit)

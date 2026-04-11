@@ -1,8 +1,9 @@
-import streamlit as st
 import asyncio
-import pandas as pd
 import sys
 from pathlib import Path
+
+import pandas as pd
+import streamlit as st
 
 # Add backend to path before importing local modules
 sys.path.append(str(Path(__file__).parent.parent))

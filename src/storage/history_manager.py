@@ -1,7 +1,8 @@
 import logging
 import uuid
+from typing import Any
+
 import aiosqlite
-from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
 
@@ -10,7 +11,7 @@ class HistoryManager:
     """Manages versioning and history of logic assets."""
 
     async def archive_version(
-        self, db: aiosqlite.Connection, existing_row: Dict[str, Any]
+        self, db: aiosqlite.Connection, existing_row: dict[str, Any]
     ):
         """Moves the current version to the history table."""
         history_id = str(uuid.uuid4())

@@ -1,10 +1,12 @@
-import os
+import asyncio
 import json
 import logging
-import asyncio
+import os
 import subprocess
-import httpx
 from typing import Any
+
+import httpx
+
 from core.config import ENABLE_AUTO_BACKUP, GITHUB_TOKEN
 
 logger = logging.getLogger(__name__)
@@ -285,7 +287,7 @@ class AutoBackupManager:
                 project_path = os.path.join(projects_root, project)
                 if not os.path.isdir(project_path):
                     continue
-                
+
                 meta_dir = os.path.join(project_path, "metadata")
                 if not os.path.exists(meta_dir):
                     continue
@@ -296,7 +298,7 @@ class AutoBackupManager:
 
                     try:
                         meta_path = os.path.join(meta_dir, filename)
-                        with open(meta_path, "r", encoding="utf-8") as f:
+                        with open(meta_path, encoding="utf-8") as f:
                             meta_data = json.load(f)
 
                         name = meta_data.get("name")
@@ -312,7 +314,7 @@ class AutoBackupManager:
                             project_path, "functions", lang.lower(), f"{name}.{ext}"
                         )
                         if os.path.exists(code_path):
-                            with open(code_path, "r", encoding="utf-8") as f:
+                            with open(code_path, encoding="utf-8") as f:
                                 meta_data["code"] = f.read()
 
                         assets.append(meta_data)
@@ -429,17 +431,17 @@ class AutoBackupManager:
             # 2. Identify files within the project directory
             found_files = []
             project_dir = os.path.join(self.export_dir, "projects", project)
-            
+
             # Check metadata
             meta_path = os.path.join(project_dir, "metadata", f"{name}.json")
             lang = "unknown"
             if os.path.exists(meta_path):
                 found_files.append(meta_path)
-                with open(meta_path, "r", encoding="utf-8") as f:
+                with open(meta_path, encoding="utf-8") as f:
                     try:
                         meta = json.load(f)
                         lang = meta.get("language", "unknown")
-                    except (json.JSONDecodeError, IOError) as e:
+                    except (OSError, json.JSONDecodeError) as e:
                         logger.warning(
                             f"AutoBackup: Failed to read metadata for '{name}' at {meta_path}: {e}"
                         )

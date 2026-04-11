@@ -1,8 +1,8 @@
 import logging
 from abc import ABC, abstractmethod
-from enum import Enum
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
+from enum import Enum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ class Result:
 
     data: Any
     mime_type: str = "text/plain"
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -45,8 +45,8 @@ class ExecutionResult:
 
     status: ExecutionStatus
     logs: ExecutionLogs
-    results: List[Result] = field(default_factory=list)
-    error: Optional[ExecutionError] = None
+    results: list[Result] = field(default_factory=list)
+    error: ExecutionError | None = None
     duration: float = 0.0
 
 
@@ -61,7 +61,7 @@ class BaseExecutor(ABC):
         self,
         code: str,
         test_code: str = "",
-        dependencies: Optional[List[str]] = None,
+        dependencies: list[str] | None = None,
         timeout: int = 10,
         **kwargs,
     ) -> ExecutionResult:

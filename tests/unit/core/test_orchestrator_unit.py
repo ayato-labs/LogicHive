@@ -1,5 +1,7 @@
 import pytest
-from orchestrator import extract_dependencies, do_list_async
+
+from orchestrator import do_list_async, extract_dependencies
+
 
 def test_extract_dependencies_python():
     code = """
@@ -39,7 +41,7 @@ async def test_do_list_async_integration(test_db):
     """
     from storage.sqlite_api import sqlite_storage
     await sqlite_storage.upsert_function({"name": "list_me", "project": "list_proj", "code": "pass", "code_hash": "h"})
-    
+
     results = await do_list_async(project="list_proj")
     assert len(results) == 1
     assert results[0]["name"] == "list_me"

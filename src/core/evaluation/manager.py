@@ -1,10 +1,11 @@
-import logging
 import asyncio
 import importlib
 import importlib.util
-import pkgutil
+import logging
 import os
-from typing import List, Dict, Any, Optional
+import pkgutil
+from typing import Any
+
 from .base import BaseEvaluator, EvaluationResult
 
 logger = logging.getLogger(__name__)
@@ -17,7 +18,7 @@ class EvaluationManager:
     """
 
     def __init__(self):
-        self.evaluators: List[BaseEvaluator] = []
+        self.evaluators: list[BaseEvaluator] = []
         self._load_plugins()
 
     def _load_plugins(self):
@@ -33,14 +34,14 @@ class EvaluationManager:
 
             # Collect all potential module candidates
             modules = []
-            
+
             # 1. Try package-based discovery (cleanest)
             package_names = [
                 f"{__package__}.plugins" if __package__ else None,
                 "core.evaluation.plugins",
                 "src.core.evaluation.plugins"
             ]
-            
+
             for pkg_name in [p for p in package_names if p]:
                 try:
                     pkg = importlib.import_module(pkg_name)
@@ -89,31 +90,31 @@ class EvaluationManager:
         except Exception as e:
             logger.error(f"EvaluationManager: Plugin discovery process failed: {e}")
 
-    def get_evaluator(self, name: str) -> Optional[BaseEvaluator]:
+    def get_evaluator(self, name: str) -> BaseEvaluator | None:
         """Returns a loaded evaluator by its name."""
         for ev in self.evaluators:
             if ev.name == name:
                 return ev
         return None
 
-    async def evaluate_all(self, code: str, language: str, **kwargs) -> Dict[str, Any]:
+    async def evaluate_all(self, code: str, language: str, **kwargs) -> dict[str, Any]:
         """
         Runs all applicable evaluators and merges results.
         """
         lang = language.lower()
-        results: Dict[str, EvaluationResult] = {}
+        results: dict[str, EvaluationResult] = {}
         test_code = kwargs.get("test_code", "")
-        
+
         # 0. Strict check for non-draft assets
         desc = (kwargs.get("description") or "").upper()
         # Support both flag and description keywords (DRAFT, AI_DRAFT, AI-DRAFT)
         is_draft = (
-            kwargs.get("is_draft", False) 
-            or "DRAFT" in desc 
-            or "AI_DRAFT" in desc 
+            kwargs.get("is_draft", False)
+            or "DRAFT" in desc
+            or "AI_DRAFT" in desc
             or "AI-DRAFT" in desc
         )
-        
+
         # If it's not a draft and has NO test code, it's a 'Sophistry' attempt or incomplete asset.
         if not is_draft and not test_code:
             return {
@@ -175,7 +176,7 @@ class EvaluationManager:
         # 4. Weighted Calculation
         # NEW Weights: Deterministic (40%), Runtime (30%), AI (20%), Static (10%)
         parts = []
-        
+
         # A. Deterministic Layer (40%) - THE TRUTH FOUNDATION
         if det_res:
             det_score = det_res.score
@@ -187,7 +188,7 @@ class EvaluationManager:
                     "details": {k: {"score": v.score, "reason": v.reason} for k, v in results.items()},
                 }
             parts.append((det_score, 0.40, f"Facts: {det_res.reason}"))
-            
+
         # B. Runtime Verification (30%)
         if runtime_res:
             runtime_score = runtime_res.score
@@ -202,7 +203,7 @@ class EvaluationManager:
         # C. AI Gate (20%) - THE AUDITOR'S OPINION
         if ai_res:
             parts.append((ai_res.score, 0.20, f"AI Opinion: {ai_res.reason}"))
-            
+
         # D. Static Analysis (10%)
         if lang == "python":
             # Prioritize Ruff if available
@@ -220,7 +221,7 @@ class EvaluationManager:
             for score, weight, reason in parts:
                 raw_final += score * (weight / total_weight)
                 reasons.append(reason)
-            
+
             # ABSOLUTE RIGOR ENFORCEMENT (Veto Layer):
             if ai_res:
                 ai_score = ai_res.score

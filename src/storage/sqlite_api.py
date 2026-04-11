@@ -1,16 +1,17 @@
-import logging
-import aiosqlite
-import json
-import uuid
 import asyncio
+import json
+import logging
+import uuid
 from functools import wraps
-from typing import List, Dict, Any, Optional
-from core.db import get_db_connection, retry_on_db_lock
-from core.config import VECTOR_DIMENSION, SQLITE_DB_PATH
-from core.exceptions import StorageError
+from typing import Any
 
-from storage.vector_store import vector_manager
+import aiosqlite
+
+from core.config import SQLITE_DB_PATH, VECTOR_DIMENSION
+from core.db import get_db_connection, retry_on_db_lock
+from core.exceptions import StorageError
 from storage.history_manager import history_manager
+from storage.vector_store import vector_manager
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,7 @@ class SqliteStorage:
 
     @retry_on_db_lock()
     @with_write_lock
-    async def upsert_function(self, function_data: Dict[str, Any]) -> bool:
+    async def upsert_function(self, function_data: dict[str, Any]) -> bool:
         """
         Inserts or updates a function.
         """
@@ -139,7 +140,7 @@ class SqliteStorage:
             logger.error(f"SQLite: Failed to save function: {e}")
             raise StorageError(f"Database upsert failed: {e}")
 
-    async def list_all_functions(self) -> List[Dict[str, Any]]:
+    async def list_all_functions(self) -> list[dict[str, Any]]:
         """
         Retrieves all functions from the database without filtering.
         Used for backup and export utilities.
@@ -176,14 +177,14 @@ class SqliteStorage:
 
     async def find_similar_functions(
         self,
-        embedding: List[float] = None,
+        embedding: list[float] = None,
         limit: int = 5,
         query_text: str = None,
-        tags: List[str] = None,
+        tags: list[str] = None,
         language: str = None,
         project: str = None,
         include_code: bool = True,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Hybrid search combining FAISS vector search and SQLite keyword/tag filtering.
         """
@@ -301,14 +302,14 @@ class SqliteStorage:
                     # val is a processed dict from _process_row or vector match
                     res_dict = dict(val)
                     p_key, n_key = key if isinstance(key, tuple) else ("default", key)
-                    
+
                     if "project" not in res_dict:
                         res_dict["project"] = p_key
                     if "name" not in res_dict:
                         res_dict["name"] = n_key
                     if "similarity" not in res_dict:
                         res_dict["similarity"] = 0.5
-                    
+
                     final_results_list.append(res_dict)
 
                 sorted_results = sorted(final_results_list, key=lambda x: x.get("similarity", 0), reverse=True)
@@ -320,7 +321,7 @@ class SqliteStorage:
             error_msg = f"{type(e).__name__}: {str(e)}"
             raise StorageError(f"Hybrid search failed: {error_msg}")
 
-    def _process_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
+    def _process_row(self, row: dict[str, Any]) -> dict[str, Any]:
         """Helper to parse JSON fields from a database row."""
         if not row:
             return None
@@ -343,12 +344,12 @@ class SqliteStorage:
 
         if "project" not in processed or processed.get("project") is None:
             processed["project"] = "default"
-        
+
         return processed
 
     async def get_function_by_name(
         self, name: str, project: str = "default"
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         try:
             db = await get_db_connection()
             db.row_factory = lambda cursor, row: dict(
@@ -368,8 +369,8 @@ class SqliteStorage:
             return None
 
     async def get_functions(
-        self, project: str = None, tags: List[str] = None, limit: int = 50
-    ) -> List[Dict[str, Any]]:
+        self, project: str = None, tags: list[str] = None, limit: int = 50
+    ) -> list[dict[str, Any]]:
         """
         Flexible listing of functions with optional project and tag filtering.
         """
@@ -405,7 +406,7 @@ class SqliteStorage:
             logger.error(f"SQLite: Failed to list functions: {e}")
             raise StorageError(f"Failed to list functions: {e}")
 
-    async def get_all_functions(self) -> List[Dict[str, Any]]:
+    async def get_all_functions(self) -> list[dict[str, Any]]:
         """Backwards compatibility wrapper."""
         return await self.get_functions(limit=1000)
 

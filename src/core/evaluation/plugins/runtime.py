@@ -1,7 +1,8 @@
 import logging
-from ..base import BaseEvaluator, EvaluationResult
-from ...execution.factory import ExecutorFactory
+
 from ...execution.base import ExecutionStatus
+from ...execution.factory import ExecutorFactory
+from ..base import BaseEvaluator, EvaluationResult
 
 logger = logging.getLogger(__name__)
 
@@ -67,19 +68,19 @@ class RuntimeEvaluator(BaseEvaluator):
                         "status": result.status.value
                     }
                 )
-            
+
             elif result.status == ExecutionStatus.TIMEOUT:
                 return EvaluationResult(
                     score=0.0,
                     reason=f"Critical Failure: Execution timed out after {timeout} seconds. Possible infinite loop.",
                     details={"status": result.status.value}
                 )
-            
+
             elif result.status == ExecutionStatus.FAILURE:
                 reason_msg = "Critical Failure: Logic error or failing test."
                 if result.error:
                     reason_msg += f" [{result.error.name}] {result.error.value}"
-                
+
                 return EvaluationResult(
                     score=0.0,
                     reason=reason_msg,
@@ -89,7 +90,7 @@ class RuntimeEvaluator(BaseEvaluator):
                         "status": result.status.value
                     }
                 )
-            
+
             else:
                 # Infrastructure error
                 return EvaluationResult(

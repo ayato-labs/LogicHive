@@ -1,5 +1,5 @@
 import ast
-from typing import List
+
 from ..base import BaseEvaluator, EvaluationResult
 
 
@@ -18,16 +18,16 @@ class DeterministicEvaluator(BaseEvaluator):
             return EvaluationResult(score=100.0, reason="Skipped (Non-Python deterministic audit not yet implemented).")
 
         test_code = kwargs.get("test_code", "")
-        
+
         # Audit Test Rigor
         assertion_count = self._count_assertions(test_code)
-        
+
         # Audit Code Substance
         hollow_methods = self._find_hollow_methods(code)
-        
+
         reasons = []
         score = 100.0
-        
+
         # 1. Zero Assertion Rule (Hard Reject)
         if assertion_count == 0:
             score = 0.0
@@ -43,10 +43,10 @@ class DeterministicEvaluator(BaseEvaluator):
             penalty = min(len(hollow_methods) * 30, 80)
             score -= penalty
             reasons.append(f"Hollow logic detected in methods: {', '.join(hollow_methods)}")
-        
+
         # Cap score
         score = max(0.0, score)
-        
+
         return EvaluationResult(
             score=score,
             reason=" | ".join(reasons),
@@ -68,15 +68,13 @@ class DeterministicEvaluator(BaseEvaluator):
                     count += 1
                 # Call to assert functions (pytest.assume, unittest methods, etc)
                 elif isinstance(node, ast.Call):
-                    if isinstance(node.func, ast.Name) and node.func.id.startswith("assert"):
-                        count += 1
-                    elif isinstance(node.func, ast.Attribute) and node.func.attr.startswith("assert"):
+                    if isinstance(node.func, ast.Name) and node.func.id.startswith("assert") or isinstance(node.func, ast.Attribute) and node.func.attr.startswith("assert"):
                         count += 1
             return count
         except SyntaxError:
             return 0
 
-    def _find_hollow_methods(self, code: str) -> List[str]:
+    def _find_hollow_methods(self, code: str) -> list[str]:
         try:
             tree = ast.parse(code)
             hollow = []
@@ -86,17 +84,15 @@ class DeterministicEvaluator(BaseEvaluator):
                     body = [n for n in node.body if not (
                         isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant) and isinstance(n.value.value, str)
                     )]
-                    
+
                     if not body or len(body) == 0:
                         hollow.append(node.name)
                         continue
-                        
+
                     # Check for 'pass' or '...'
                     if len(body) == 1:
                         stmt = body[0]
-                        if isinstance(stmt, ast.Pass):
-                            hollow.append(node.name)
-                        elif isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant) and stmt.value.value is Ellipsis:
+                        if isinstance(stmt, ast.Pass) or isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant) and stmt.value.value is Ellipsis:
                             hollow.append(node.name)
                         # Check for identity return: def f(x): return x
                         elif isinstance(stmt, ast.Return) and isinstance(stmt.value, ast.Name):

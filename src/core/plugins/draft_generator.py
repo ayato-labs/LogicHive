@@ -1,7 +1,8 @@
 import logging
-from typing import List, Dict, Any, Optional
-from core.consolidation import LogicIntelligence
+from typing import Any
+
 from core.config import GEMINI_API_KEY
+from core.consolidation import LogicIntelligence
 
 logger = logging.getLogger(__name__)
 
@@ -12,15 +13,15 @@ class DraftGenerator:
     Uses existing vault patterns as context to maintain consistency.
     """
 
-    def __init__(self, intel: Optional[LogicIntelligence] = None):
+    def __init__(self, intel: LogicIntelligence | None = None):
         self.intel = intel or LogicIntelligence(GEMINI_API_KEY)
 
     async def generate_draft(
         self,
         query: str,
-        context_results: List[Dict[str, Any]],
+        context_results: list[dict[str, Any]],
         language: str = "python",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Generates a functional draft based on the user query and nearby context.
         """

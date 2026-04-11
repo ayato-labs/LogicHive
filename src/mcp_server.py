@@ -1,7 +1,8 @@
 from fastmcp import FastMCP
+
 import orchestrator
-from orchestrator import do_save_async, do_delete_async
 from core.exceptions import LogicHiveError, ValidationError
+from orchestrator import do_delete_async, do_save_async
 
 # Initialize FastMCP server
 mcp = FastMCP("LogicHive")
@@ -144,9 +145,10 @@ async def debug_db() -> str:
     """
     Debug tool to inspect LogicHive database configuration and table structure.
     """
-    from core.config import SQLITE_DB_PATH
     import os
     import sqlite3
+
+    from core.config import SQLITE_DB_PATH
 
     status = [f"SQLITE_DB_PATH: {SQLITE_DB_PATH}"]
     status.append(f"Exists: {os.path.exists(SQLITE_DB_PATH)}")

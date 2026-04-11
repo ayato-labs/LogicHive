@@ -1,5 +1,7 @@
 import pytest
+
 from core.plugins.draft_generator import DraftGenerator
+
 
 @pytest.mark.asyncio
 async def test_generate_draft_logic(fake_intel):

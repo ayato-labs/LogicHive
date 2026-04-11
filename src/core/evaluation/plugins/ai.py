@@ -1,8 +1,9 @@
 import logging
-from typing import Optional
-from ..base import BaseEvaluator, EvaluationResult
-from core.consolidation import LogicIntelligence
+
 from core.config import GEMINI_API_KEY
+from core.consolidation import LogicIntelligence
+
+from ..base import BaseEvaluator, EvaluationResult
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ class AIGateEvaluator(BaseEvaluator):
         return "ai_gate"
 
     def __init__(
-        self, api_key: str = GEMINI_API_KEY, intel: Optional[LogicIntelligence] = None
+        self, api_key: str = GEMINI_API_KEY, intel: LogicIntelligence | None = None
     ):
         self.intel = intel or LogicIntelligence(api_key)
 

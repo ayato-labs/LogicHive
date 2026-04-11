@@ -1,14 +1,15 @@
 # Function Store REST API (Simplified Personal MVP)
-from typing import List, Optional
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+from core.exceptions import LogicHiveError, ValidationError
 from orchestrator import (
     do_get_async,
     do_save_async,
     do_search_async,
 )
-from core.exceptions import LogicHiveError, ValidationError
-from pydantic import BaseModel
 
 app = FastAPI(
     title="LogicHive API",
@@ -30,14 +31,14 @@ app.add_middleware(
 class FunctionCreate(BaseModel):
     name: str  # Renamed for clarity
     code: str
-    description: Optional[str] = ""
-    tags: Optional[List[str]] = []
-    language: Optional[str] = "python"
+    description: str | None = ""
+    tags: list[str] | None = []
+    language: str | None = "python"
 
 
 class SearchQuery(BaseModel):
     query: str
-    limit: Optional[int] = 5
+    limit: int | None = 5
 
 
 # --- Endpoints ---

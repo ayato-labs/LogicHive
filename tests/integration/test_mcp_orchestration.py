@@ -1,6 +1,8 @@
 import pytest
+
 from orchestrator import do_save_async, do_search_async
 from storage.sqlite_api import sqlite_storage
+
 
 @pytest.mark.asyncio
 async def test_upsert_function_integration_flow(test_db):
@@ -11,7 +13,7 @@ async def test_upsert_function_integration_flow(test_db):
     code = "def add_numbers(a, b): return a + b"
     name = "add_numbers"
     project = "integration_test"
-    
+
     # Execute
     # The global fake will return score 95 and auto-tags
     result = await do_save_async(
@@ -20,17 +22,17 @@ async def test_upsert_function_integration_flow(test_db):
         project=project,
         language="python"
     )
-    
+
     # Note: Result is the save_result (True/False or maybe the added data)
     # Actually do_save_async returns save_result from sqlite_storage.upsert_function
     assert result is True
-    
+
     # 2. Check persistence in SQLite
     found = await sqlite_storage.get_function_by_name(name, project=project)
     assert found is not None
     assert found["code"] == code
     assert found["reliability_score"] >= 0.7
-    
+
     # 3. Check vector discovery
     search_results = await do_search_async(
         query="test query",
@@ -47,7 +49,7 @@ async def test_upsert_function_quality_gate_rejection_flow(test_db):
     """
     # Triggering the "fail" keyword in our FakeIntelligence
     bad_code = "def error_func(): pass"
-    
+
     from core.exceptions import ValidationError
     with pytest.raises(ValidationError) as excinfo:
         await do_save_async(
@@ -55,5 +57,5 @@ async def test_upsert_function_quality_gate_rejection_flow(test_db):
             code=bad_code,
             project="rejection_test"
         )
-    
+
     assert "Quality Gate rejected" in str(excinfo.value)

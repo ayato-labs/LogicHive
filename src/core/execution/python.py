@@ -1,13 +1,20 @@
-import logging
 import asyncio
-import tempfile
-import os
 import json
+import logging
+import os
+import tempfile
 import time
 import traceback
 from pathlib import Path
-from typing import List, Optional
-from .base import BaseExecutor, ExecutionResult, ExecutionStatus, ExecutionLogs, ExecutionError, Result
+
+from .base import (
+    BaseExecutor,
+    ExecutionError,
+    ExecutionLogs,
+    ExecutionResult,
+    ExecutionStatus,
+    Result,
+)
 from .factory import ExecutorFactory
 
 logger = logging.getLogger(__name__)
@@ -40,14 +47,14 @@ class EphemeralPythonExecutor(BaseExecutor):
         self,
         code: str,
         test_code: str = "",
-        dependencies: Optional[List[str]] = None,
+        dependencies: list[str] | None = None,
         timeout: int = 20,
         memory_limit_mb: int = 256,
         **kwargs,
     ) -> ExecutionResult:
         start_time = time.time()
         dependencies = dependencies or []
-        
+
         # 1. Prepare Workspace
         with tempfile.TemporaryDirectory(prefix="logichive_exec_") as tmpdir:
             tmp_path = Path(tmpdir)
@@ -70,12 +77,12 @@ class EphemeralPythonExecutor(BaseExecutor):
 
             # 3. Execute with isolated environment
             process_env = {
-                k: v for k, v in os.environ.items() 
+                k: v for k, v in os.environ.items()
                 if k in ["PATH", "SYSTEMROOT", "SystemDrive", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP", "USERNAME"]
             }
             process_env["PYTHONPATH"] = ""
             process_env["PYTHONNOUSERSITE"] = "1"
-            
+
             memory_exceeded = False
             try:
                 process = await asyncio.create_subprocess_exec(
@@ -99,7 +106,7 @@ class EphemeralPythonExecutor(BaseExecutor):
                                     total_mem += child.memory_info().rss
                                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                                     continue
-                            
+
                             if (total_mem / 1024 / 1024) > memory_limit_mb:
                                 logger.warning(f"Executor: Memory limit exceeded ({total_mem / 1024 / 1024:.1f}MB > {memory_limit_mb}MB). Killing process tree.")
                                 memory_exceeded = True
@@ -110,7 +117,7 @@ class EphemeralPythonExecutor(BaseExecutor):
                         await asyncio.sleep(0.2)
 
                 monitor_task = asyncio.create_task(monitor_resources())
-                
+
                 try:
                     stdout_bytes, stderr_bytes = await asyncio.wait_for(
                         process.communicate(), timeout=timeout
@@ -138,11 +145,11 @@ class EphemeralPythonExecutor(BaseExecutor):
                 # 4. Parse Results
                 duration = time.time() - start_time
                 status = ExecutionStatus.SUCCESS if process.returncode == 0 else ExecutionStatus.FAILURE
-                
+
                 # Try to load structured results from the harness
                 results = []
                 error = None
-                
+
                 if result_file.exists():
                     try:
                         raw_result = json.loads(result_file.read_text(encoding="utf-8"))
@@ -194,7 +201,7 @@ class EphemeralPythonExecutor(BaseExecutor):
         """
         # We escape the result path for the string template
         res_path = str(result_file).replace("\\", "\\\\")
-        
+
         harness = f"""
 import json
 import traceback

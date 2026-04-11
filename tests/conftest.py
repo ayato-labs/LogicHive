@@ -1,5 +1,6 @@
-import pytest
 import os
+
+import pytest
 
 # Set environment variables for testing BEFORE any imports
 os.environ["SQLITE_DB_PATH"] = os.path.join("storage", "data", "test", "test_logichive.db")
@@ -11,7 +12,8 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
+
 
 class FakeLogicIntelligence:
     """
@@ -57,12 +59,12 @@ class FakeLogicIntelligence:
             return {"score": 0, "reason": "Fake: Detected syntax errors"}
         if "injection" in prompt_lower or "<script>" in prompt_lower:
             return {"score": 0, "reason": "Fake: Potential injection attempt blocked"}
-        
+
         if "break" in prompt_lower:
             return None
         if "fail" in prompt_lower:
             return {}
-            
+
         # Success response (Default)
         if use_json:
             return {
@@ -97,13 +99,13 @@ def intelligence_isolation(request):
         patch("core.plugins.draft_generator.LogicIntelligence", new=FakeLogicIntelligence),
         patch("core.evaluation.plugins.ai.LogicIntelligence", new=FakeLogicIntelligence),
     ]
-    
+
     started_patches = []
     for p in patches:
         started_patches.append(p.start())
-    
+
     yield
-    
+
     for p in patches:
         p.stop()
 
@@ -142,9 +144,11 @@ async def test_db():
 @pytest.fixture(autouse=True)
 async def clear_cache():
     """Resets the vector manager state between tests."""
-    import faiss
-    from storage.sqlite_api import vector_manager
     import os
+
+    import faiss
+
+    from storage.sqlite_api import vector_manager
 
     vector_manager.id_to_name = {}
     vector_manager.name_to_id = {}
@@ -152,7 +156,7 @@ async def clear_cache():
     # Re-initialize to a fresh empty index
     vector_manager.index = faiss.IndexFlatIP(768)
     vector_manager._initialized = True
-    
+
     # Also remove physical index files if they exist to prevent cross-contamination
     for f in [os.environ.get("FAISS_INDEX_PATH"), os.environ.get("FAISS_MAPPING_PATH"), os.environ.get("SQLITE_DB_PATH")]:
         if f and os.path.exists(f):

@@ -1,7 +1,9 @@
 import pytest
-from orchestrator import do_save_async
+
 from core.exceptions import ValidationError
+from orchestrator import do_save_async
 from storage.sqlite_api import sqlite_storage
+
 
 @pytest.mark.asyncio
 async def test_rigor_story_sophistry_rejection(test_db):
@@ -15,7 +17,7 @@ async def test_rigor_story_sophistry_rejection(test_db):
     # test_code with NO assertions
     test_code = "do_nothing()"
     description = "A very complex and important logic asset."
-    
+
     with pytest.raises(ValidationError) as excinfo:
         await do_save_async(
             name=name,
@@ -24,7 +26,7 @@ async def test_rigor_story_sophistry_rejection(test_db):
             test_code=test_code,
             language="python"
         )
-    
+
     assert "DETERMINISTIC REJECTION" in str(excinfo.value)
     # Verify it was NOT saved
     saved = await sqlite_storage.get_function_by_name(name)
@@ -41,7 +43,7 @@ async def test_rigor_story_honest_promotion(test_db):
     code = "def add(a, b): return a + b"
     test_code = "assert add(1, 1) == 2"
     description = "Adds two numbers."
-    
+
     result = await do_save_async(
         name=name,
         code=code,
@@ -49,7 +51,7 @@ async def test_rigor_story_honest_promotion(test_db):
         test_code=test_code,
         language="python"
     )
-    
+
     assert result is True
     # Verify it WAS saved and has a reliability score
     saved = await sqlite_storage.get_function_by_name(name)
@@ -70,7 +72,7 @@ async def test_rigor_story_draft_bypass(test_db):
     description = "DRAFT: Prototype of something."
     code = "def incomplete_but_valid(): pass"
     test_code = "" # No tests
-    
+
     result = await do_save_async(
         name=name,
         code=code,
@@ -78,9 +80,9 @@ async def test_rigor_story_draft_bypass(test_db):
         test_code=test_code,
         language="python"
     )
-    
+
     assert result is True
     saved = await sqlite_storage.get_function_by_name(name)
     assert saved is not None
     # Threshold is 0.0 for drafts, but result["score"] will be low
-    assert saved["reliability_score"] < 0.5 
+    assert saved["reliability_score"] < 0.5

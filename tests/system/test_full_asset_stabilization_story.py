@@ -1,11 +1,14 @@
-import pytest
-from orchestrator import do_save_async, do_search_async, do_get_async
-from pathlib import Path
 import sys
+from pathlib import Path
+
+import pytest
+
+from orchestrator import do_get_async, do_save_async, do_search_async
 
 # Add tools/audit to path
 sys.path.append(str(Path(__file__).parent.parent.parent / "tools" / "audit"))
 from stabilize_vault import stabilize_vault  # noqa: E402
+
 
 @pytest.mark.asyncio
 async def test_complete_asset_lifecycle_story(test_db):
@@ -19,16 +22,16 @@ async def test_complete_asset_lifecycle_story(test_db):
     """
     project = "story_project"
     query = "implement factorial calculation"
-    
+
     # 1. Search for missing function
     # Note: do_search_async triggers DraftGenerator if score < 0.45 and it's a generation request
     results = await do_search_async(query, project=project, limit=1)
-    
+
     # Verify we got a draft
     assert len(results) > 0
     draft = results[0]
     assert "[AI-DRAFT]" in draft["description"]
-    
+
     # 2. Save the draft
     # The orchestrator do_save_async handles the metadata enrichment and embedding
     # We add a dummy test_code here manually as if the user/agent provided it
@@ -43,7 +46,7 @@ def test_factorial():
     pass
 test_factorial()
 """
-    
+
     save_success = await do_save_async(
         name=draft_name,
         code=draft_code,
@@ -53,20 +56,20 @@ test_factorial()
         project=project
     )
     assert save_success
-    
+
     # 3. Verify it's in the vault as draft
     func_in_db = await do_get_async(draft_name, project=project)
     assert "[AI-DRAFT]" in func_in_db["description"]
-    
+
     # 4. Trigger Stabilization (Audit)
     await stabilize_vault(dry_run=False, project=project)
-    
+
     # 5. Final Search - Should find the verified function
     final_results = await do_search_async(query, project=project, limit=5)
-    
+
     # Extract the asset we saved from the search results
     top_match = next((res for res in final_results if res["name"] == draft_name), None)
-    
+
     assert top_match is not None, f"Asset '{draft_name}' not found in search results"
     assert "[VERIFIED]" in top_match["description"]
     # AI(90)*0.3 + Static(100)*0.3 + Runtime(100)*0.4 = 97.0 / 100 = 0.97

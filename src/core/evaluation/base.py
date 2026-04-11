@@ -1,13 +1,13 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass
 class EvaluationResult:
     score: float  # 0.0 to 100.0
     reason: str
-    details: Optional[Dict[str, Any]] = None
+    details: dict[str, Any] | None = None
 
 
 class BaseEvaluator(ABC):

@@ -1,5 +1,5 @@
-import platform
 import logging
+import platform
 
 logger = logging.getLogger(__name__)
 

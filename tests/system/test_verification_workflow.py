@@ -1,5 +1,7 @@
 import pytest
-from orchestrator import do_save_async, do_get_async
+
+from orchestrator import do_get_async, do_save_async
+
 
 @pytest.mark.asyncio
 async def test_system_save_and_verify_success(test_db):
@@ -10,7 +12,7 @@ async def test_system_save_and_verify_success(test_db):
     name = "system_valid_func"
     code = "def greet(name): return f'Hello, {name}!'"
     test_code = "assert greet('World') == 'Hello, World!'"
-    
+
     result = await do_save_async(
         name=name,
         code=code,
@@ -18,10 +20,10 @@ async def test_system_save_and_verify_success(test_db):
         description="System verification test",
         tags=["system-test"]
     )
-    
+
     # Check result (do_save_async returns True on success)
     assert result is True
-    
+
     # Check DB via orchestrated call
     stored = await do_get_async(name)
     assert stored is not None
@@ -34,11 +36,11 @@ async def test_system_save_and_verify_failure(test_db):
     Checks that the save is REJECTED (raises ValidationError).
     """
     from core.exceptions import ValidationError
-    
+
     name = "system_faulty_func"
     code = "def greet(name): return 'Goodbye'"
     test_code = "assert greet('World') == 'Hello, World!'"
-    
+
     with pytest.raises(ValidationError) as exc_info:
         await do_save_async(
             name=name,
@@ -46,9 +48,9 @@ async def test_system_save_and_verify_failure(test_db):
             description="This should fail",
             test_code=test_code
         )
-    
+
     assert "Quality Gate rejected" in str(exc_info.value)
-    
+
     # Check DB (Should NOT exist)
     stored = await do_get_async(name)
     assert stored is None
@@ -62,7 +64,7 @@ async def test_system_dependency_verification(test_db):
     name = "dep_func"
     code = "import dateutil.parser\ndef parse(s): return dateutil.parser.parse(s).year"
     test_code = "assert parse('2026-01-01') == 2026"
-    
+
     result = await do_save_async(
         name=name,
         code=code,
@@ -70,5 +72,5 @@ async def test_system_dependency_verification(test_db):
         test_code=test_code,
         dependencies=["python-dateutil"]
     )
-    
+
     assert result is True

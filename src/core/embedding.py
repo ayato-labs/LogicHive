@@ -1,9 +1,8 @@
 import logging
-from typing import List
 
 from core.config import (
-    GEMINI_API_KEY,
     EMBEDDING_MODEL_ID,
+    GEMINI_API_KEY,
 )
 
 # Suppress verbose third-party logging
@@ -39,7 +38,7 @@ class GeminiEmbeddingService:
         except Exception as e:
             logger.error(f"GeminiEmbeddingService: Initialization Failed: {e}")
 
-    def get_embedding(self, text: str, is_query: bool = False) -> List[float]:
+    def get_embedding(self, text: str, is_query: bool = False) -> list[float]:
         self._ensure_initialized()
         if not self._client:
             return [0.0] * 768

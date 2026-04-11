@@ -1,15 +1,17 @@
-import logging
-import json
 import asyncio
-import numpy as np
-import faiss
+import json
+import logging
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any
+
+import faiss
+import numpy as np
+
 from core.config import (
-    VECTOR_DIMENSION,
+    FAISS_GHOST_REBUILD_THRESHOLD,
     FAISS_INDEX_PATH,
     FAISS_MAPPING_PATH,
-    FAISS_GHOST_REBUILD_THRESHOLD,
+    VECTOR_DIMENSION,
 )
 from core.db import get_db_connection
 from core.exceptions import StorageError
@@ -31,7 +33,7 @@ class VectorIndexManager:
         self._lock = asyncio.Lock()
         self._initialized = False
 
-    async def ensure_initialized(self, db_rows: List[Dict[str, Any]]):
+    async def ensure_initialized(self, db_rows: list[dict[str, Any]]):
         if self._initialized:
             return
 
@@ -43,7 +45,7 @@ class VectorIndexManager:
             if Path(self._index_path).exists() and Path(self._mapping_path).exists():
                 try:
                     self.index = faiss.read_index(self._index_path)
-                    with open(self._mapping_path, "r") as f:
+                    with open(self._mapping_path) as f:
                         mapping = json.load(f)
                         self.id_to_name = {
                             int(k): v for k, v in mapping["id_to_name"].items()
@@ -88,7 +90,7 @@ class VectorIndexManager:
             await self.save_to_disk()
             logger.info("FAISS: Rebuilt index from DB.")
 
-    async def add_vector(self, name: str, embedding: List[float], project: str = "default"):
+    async def add_vector(self, name: str, embedding: list[float], project: str = "default"):
         async with self._lock:
             full_key = f"{project}:{name}"
             # 1. Basic validation
@@ -211,7 +213,7 @@ class VectorIndexManager:
                 f"FAISS: Failed to save index to {self._index_path}: {e}", exc_info=True
             )
 
-    async def search(self, query_emb: List[float], limit: int = 5, project: Optional[str] = None) -> List[tuple]:
+    async def search(self, query_emb: list[float], limit: int = 5, project: str | None = None) -> list[tuple]:
         if not self._initialized:
             return []
 
@@ -228,11 +230,11 @@ class VectorIndexManager:
 
         results = []
         project_prefix = f"{search_project}:"
-        
+
         for i, idx in enumerate(indices[0]):
             if idx == -1:
                 continue
-            
+
             full_key = self.id_to_name.get(int(idx))
             if full_key and full_key.startswith(project_prefix):
                 name_part = full_key.split(":", 1)[1]
@@ -241,10 +243,10 @@ class VectorIndexManager:
                     "project": search_project,
                     "similarity": float(similarities[0][i])
                 })
-                
+
             if len(results) >= limit:
                 break
-                
+
         return results
 
 
