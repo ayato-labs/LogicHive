@@ -344,7 +344,7 @@ class LogicIntelligence:
             f"LOGIC ASSET: {name}\n"
             f"TECHNICAL SPECIFICATION:\n{description}\n"
             f"TAGS: {tags_str}\n"
-            f"--- IMPLEMENTATION DETALS ---\n"
+            f"--- IMPLEMENTATION DETAILS ---\n"
             f"{code}"
         )
         # Note: generate_embedding will handle the final 7,000 char (2048 token) truncation.
