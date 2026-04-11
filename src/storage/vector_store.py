@@ -62,10 +62,10 @@ class VectorIndexManager:
             embeddings = []
             names = []
             for row in db_rows:
-                if "embedding" in row.keys() and row["embedding"]:
+                if "embedding" in row and row["embedding"]:
                     try:
                         vec = json.loads(row["embedding"])
-                        project = row["project"] if "project" in row.keys() else "default"
+                        project = row["project"] if "project" in row else "default"
                         name = row["name"]
                         full_key = f"{project}:{name}"
                         if len(vec) == self.dimension:
@@ -170,7 +170,7 @@ class VectorIndexManager:
             for row in rows:
                 try:
                     vec = json.loads(row["embedding"])
-                    project = row["project"] if "project" in row.keys() else "default"
+                    project = row["project"] if "project" in row else "default"
                     name = row["name"]
                     full_key = f"{project}:{name}"
                     if len(vec) == self.dimension:
@@ -193,7 +193,7 @@ class VectorIndexManager:
             logger.info(f"FAISS: Rebuild complete. Active vectors: {self.index.ntotal}")
         except Exception as e:
             logger.error(f"FAISS: Rebuild failed: {e}")
-            raise StorageError(f"Vector Index Rebuild failed: {e}")
+            raise StorageError(f"Vector Index Rebuild failed: {e}") from e
 
     async def save_to_disk(self):
         try:
