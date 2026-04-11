@@ -23,7 +23,8 @@ class AIGateEvaluator(BaseEvaluator):
 
     async def evaluate(self, code: str, language: str, **kwargs) -> EvaluationResult:
         try:
-            quality = await self.intel.evaluate_quality(code)
+            test_code = kwargs.get("test_code", "")
+            quality = await self.intel.evaluate_quality(code, test_code=test_code)
             score = float(quality.get("score", 0))
             reason = quality.get("reason", "No reason provided by AI.")
             return EvaluationResult(score=score, reason=reason)

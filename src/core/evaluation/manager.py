@@ -66,11 +66,23 @@ class EvaluationManager:
         """
         lang = language.lower()
         results: Dict[str, EvaluationResult] = {}
+        test_code = kwargs.get("test_code", "")
+        
+        # 0. Strict check for non-draft assets
+        is_draft = "[AI_DRAFT]" in (kwargs.get("description", "") or "") or "[AI-DRAFT]" in (kwargs.get("description", "") or "")
+        
+        # If it's not a draft and has NO test code, it's a 'Sophistry' attempt or incomplete asset.
+        if not is_draft and not test_code:
+            return {
+                "score": 0.0,
+                "reason": "Security/Stability Failure: Non-draft assets MUST have meaningful test code to be VERIFIED.",
+                "details": {"system": "Rigor Gate"},
+            }
 
         # 1. Critical Step: Structural check first
         structural = self.get_evaluator("structural")
         if structural:
-            struct_res = await structural.evaluate(code, lang)
+            struct_res = await structural.evaluate(code, lang, **kwargs)
             if struct_res.score == 0:
                 return {
                     "score": 0.0,
@@ -83,13 +95,14 @@ class EvaluationManager:
                 "EvaluationManager: StructuralEvaluator not found in plugins."
             )
 
-        # 2. Run others (AI and Static)
+        # 2. Run others (AI, Static, Runtime)
         tasks = []
         eval_map = {}
 
         for ev in self.evaluators:
             if ev.name == "structural":
                 continue
+            # Pass everything in kwargs (including test_code)
             tasks.append(ev.evaluate(code, lang, **kwargs))
             eval_map[len(tasks) - 1] = ev.name
 
@@ -115,15 +128,13 @@ class EvaluationManager:
         eslint_res = results.get("eslint")
         runtime_res = results.get("runtime")
 
-        is_draft = "[AI_DRAFT]" in (kwargs.get("description", "") or "") or "[AI-DRAFT]" in (kwargs.get("description", "") or "")
-
         # 4. Weighted Calculation
         # Weights: AI (30%), Static/Ruff (30%), Runtime (40%)
         parts = []
         
         # AI Gate (30%)
         if ai_res:
-            parts.append((ai_res.score, 0.30, f"AI: {ai_res.reason}"))
+            parts.append((ai_res.score, 0.30, f"AI/Rigor: {ai_res.reason}"))
             
         # Static Analysis (30%)
         if lang == "python":
@@ -139,11 +150,11 @@ class EvaluationManager:
             runtime_score = runtime_res.score
             
             # HARD BLOCK: If it's NOT a draft and tests fail with logic error (score 0), 
-            # we force final score to 0 to trigger rejection.
+            # we force final score to 0 to trigger researcher's logic.
             if runtime_score == 0 and not is_draft:
                 return {
                     "score": 0.0,
-                    "reason": f"Critical Logic Failure (Non-Draft): {runtime_res.reason}",
+                    "reason": f"Critical Logic Failure (Verified Asset): {runtime_res.reason}",
                     "details": {k: {"score": v.score, "reason": v.reason} for k, v in results.items()},
                 }
                 
@@ -152,9 +163,18 @@ class EvaluationManager:
         # Normalized weight calculation
         total_weight = sum(p[1] for p in parts)
         if total_weight > 0:
+            raw_final = 0.0
             for score, weight, reason in parts:
-                final_score += score * (weight / total_weight)
+                raw_final += score * (weight / total_weight)
                 reasons.append(reason)
+            
+            # RIGOR ENFORCEMENT: If AI Gate explicitly detects garbage or trivial tests (score < 40),
+            # we apply a heavy penalty to the overall score.
+            if ai_res and ai_res.score < 40:
+                final_score = raw_final * 0.2  # CRUSH the score if AI rejects rigor
+                reasons.insert(0, "CRITICAL: AI Gate rejected asset rigor. Asset heavily penalized.")
+            else:
+                final_score = raw_final
         else:
             final_score = 0.0
             reasons.append("No applicable evaluators succeeded.")
