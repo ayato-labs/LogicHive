@@ -16,7 +16,8 @@ async def test_full_save_and_search_flow(test_db, mock_intel):
         name=name,
         code=code,
         project="test-proj",
-        tags=["pipeline"]
+        tags=["pipeline"],
+        test_code="assert pipeline_func() == 42"
     )
     assert success is True
 
@@ -62,10 +63,11 @@ async def test_orchestrator_metadata_optimization(test_db, mock_intel):
     name = "no_meta_func"
     await do_save_async(
         name=name,
-        code="def optimized_func(): pass", # Longer code for AI Gate
-        description="", # Empty
-        tags=[],        # Empty
-        project="meta-proj"
+        code="def optimized_func(): return True", # Validating return
+        description="", # Trigger optimization
+        tags=[],
+        project="meta-proj",
+        test_code="assert optimized_func() is True"
     )
 
     retrieved = await sqlite_storage.get_function_by_name(name, project="meta-proj")

@@ -12,8 +12,8 @@ async def test_rag_project_isolation(test_db):
     code_a = "def test(): return 'Project A'"
     code_b = "def test(): return 'Project B'"
 
-    await do_save_async(name="iso_func", code=code_a, project="alpha")
-    await do_save_async(name="iso_func", code=code_b, project="beta")
+    await do_save_async(name="iso_func", code=code_a, project="alpha", test_code="assert test() == 'Project A'")
+    await do_save_async(name="iso_func", code=code_b, project="beta", test_code="assert test() == 'Project B'")
 
     # 2. Search in Project Alpha
     results_alpha = await do_search_async(query="iso_func", project="alpha")

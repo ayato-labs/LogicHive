@@ -20,7 +20,8 @@ async def test_upsert_function_integration_flow(test_db):
         name=name,
         code=code,
         project=project,
-        language="python"
+        language="python",
+        test_code="assert add_numbers(1, 2) == 3"
     )
 
     # Note: Result is the save_result (True/False or maybe the added data)

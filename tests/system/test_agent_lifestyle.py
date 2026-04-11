@@ -31,7 +31,13 @@ async def test_full_agent_workflow(full_env):
     print("\n[Step 1] Agent saves a new logic asset...")
     name = "workflow_func"
     code = "def workflow_func(): return 'original'"
-    await do_save_async(name=name, code=code, description="Original logic", tags=["workflow"])
+    await do_save_async(
+        name=name,
+        code=code,
+        description="Original logic",
+        tags=["workflow"],
+        test_code="assert workflow_func() == 'original'"
+    )
 
     # Verify in DB
     saved = await sqlite_storage.get_function_by_name(name)

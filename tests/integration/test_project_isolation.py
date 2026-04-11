@@ -16,7 +16,8 @@ async def test_full_project_isolation(test_db, mock_intel):
         name=common_name,
         code="def alpha(): return 'A'",
         project="alpha",
-        tags=["tag-a"]
+        tags=["tag-a"],
+        test_code="assert alpha() == 'A'"
     )
 
     # 2. Save in Project Beta (Same name, different code)
@@ -24,7 +25,8 @@ async def test_full_project_isolation(test_db, mock_intel):
         name=common_name,
         code="def beta(): return 'B'",
         project="beta",
-        tags=["tag-b"]
+        tags=["tag-b"],
+        test_code="assert beta() == 'B'"
     )
 
     # 3. Verify SQL Retrieval isolation

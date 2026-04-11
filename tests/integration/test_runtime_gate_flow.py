@@ -50,7 +50,7 @@ async def test_runtime_gate_passes_success(eval_manager):
 async def test_runtime_gate_timeout_blocks(eval_manager):
     """Verifies that a timeout in runtime leads to a score of 0."""
     code = "import time\ndef hang():\n    while True: time.sleep(0.01)"
-    test_code = "hang()"
+    test_code = "assert hang() is None"
 
     # We pass a short timeout via kwargs
     result = await eval_manager.evaluate_all(
