@@ -168,11 +168,22 @@ class EvaluationManager:
                 raw_final += score * (weight / total_weight)
                 reasons.append(reason)
             
-            # RIGOR ENFORCEMENT: If AI Gate explicitly detects garbage or trivial tests (score < 40),
-            # we apply a heavy penalty to the overall score.
-            if ai_res and ai_res.score < 40:
-                final_score = raw_final * 0.2  # CRUSH the score if AI rejects rigor
-                reasons.insert(0, "CRITICAL: AI Gate rejected asset rigor. Asset heavily penalized.")
+            # ABSOLUTE RIGOR ENFORCEMENT:
+            if ai_res:
+                ai_score = ai_res.score
+                
+                # 1. KILL-SWITCH: If AI identifies 'Quality Theater' or 'Hollow Logic' (Score < 30)
+                if ai_score < 30:
+                    final_score = 0.0
+                    reasons.insert(0, "CRITICAL REJECTION: AI Forensic Auditor identified 'Quality Theater' or Hollow Logic. Asset discarded.")
+                
+                # 2. VETO POWER: If AI score is below 70, the overall asset CANNOT be 'Verified'.
+                # We cap the final score at the AI score to prevent 'Sophistry' by averaging.
+                elif ai_score < 70:
+                    final_score = min(raw_final, ai_score)
+                    reasons.insert(0, f"VETO: AI Auditor expressed doubt about asset rigor (Score: {ai_score}). Overall score capped.")
+                else:
+                    final_score = raw_final
             else:
                 final_score = raw_final
         else:
