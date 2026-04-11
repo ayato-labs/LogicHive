@@ -63,7 +63,7 @@ node_modules/
 Thumbs.db
 
 # LogicHive Vault Backup
-exports/
+# (Tracked for GitHub sync)
 
 # New Logs and Debug
 debug/

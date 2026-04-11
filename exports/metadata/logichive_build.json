@@ -1,0 +1,17 @@
+{
+    "id": "153ae743-67da-4667-9090-1a1cf3eabb56",
+    "name": "logichive_build",
+    "code": "def build():\n    project_root = Path(__file__).parent.parent.resolve()\n    os.chdir(project_root)\n\n    print(f\"Building LogicHive.exe in {project_root}...\")\n\n    # Clean old builds\n    for folder in [\"build\", \"dist\", \"release\"]:\n        if os.path.exists(folder):\n            print(f\"Cleaning {folder}...\")\n            shutil.rmtree(folder)\n\n    # Run PyInstaller\n    try:\n        # Run PyInstaller using the spec file\n        subprocess.run([\"pyinstaller\", \"--noconfirm\", \"LogicHive.spec\"], check=True)\n        print(\n            \"\\n[SUCCESS] Build complete! You can find the executable in the 'dist' folder.\"\n        )\n\n        # Move to a 'release' folder for distribution if needed\n        # (For now, let's just keep it in dist/ for simplicity as per MVP)\n\n    except subprocess.CalledProcessError as e:\n        print(f\"\\n[ERROR] Build failed: {e}\")\n    except Exception as e:\n        print(f\"\\n[ERROR] Unexpected error: {e}\")",
+    "description": "LogicHiveプロジェクト内部から抽出されたモジュール化ロジック: build (ci_cd/build_exe.py)",
+    "tags": "[\"internal\", \"logichive\", \"ci_cd\", \"build\"]",
+    "reliability_score": 0.875,
+    "test_metrics": "{}",
+    "call_count": 0,
+    "organization_id": null,
+    "created_at": "2026-03-13 14:28:20",
+    "language": "python",
+    "code_hash": "69f1ef2922ba50c37a97f9117670557afb3a9722a412f0ce06418ff8d14a0c57",
+    "version": 1,
+    "dependencies": "[]",
+    "test_code": ""
+}

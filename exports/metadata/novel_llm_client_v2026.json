@@ -1,0 +1,19 @@
+{
+    "name": "novel_llm_client_v2026",
+    "code": "import os\nfrom typing import List, Optional, Union\nfrom pathlib import Path\nimport yaml\nfrom google import genai\nfrom google.genai import errors\n\nclass NovelLLMClient:\n    \"\"\"\n    小説執筆支援システム向けの堅牢なLLMクライアント。\n    Google Gemini APIを使用し、マルチモデルフォールバック、プリセット解決、\n    非同期（aio）呼び出し、および構造化出力（JSON Schema）をサポートします。\n    \"\"\"\n\n    def __init__(self, api_key: Optional[str] = None, presets: Optional[dict] = None):\n        self.client = genai.Client(api_key=api_key or os.getenv(\"GOOGLE_API_KEY\"))\n        self.presets = presets or {\n            \"quality_priority\": [\"gemini-2.0-pro-exp-02-05\", \"gemini-2.0-flash\"],\n            \"resource_priority\": [\"gemini-2.0-flash\", \"gemini-2.0-flash-lite\"],\n            \"embedding\": [\"gemini-embedding-001\"]\n        }\n\n    def resolve_models(self, model_input: Union[str, List[str]]) -> List[str]:\n        if isinstance(model_input, list):\n            resolved = []\n            for m in model_input:\n                resolved.extend(self.presets.get(m, [m]))\n            return resolved\n        return self.presets.get(model_input, [model_input])\n\n    async def generate_content(\n        self, model: Union[str, List[str]], contents: Union[str, list], config: Optional[dict] = None, **kwargs\n    ):\n        \"\"\"フォールバックロジック付き非同期生成。Structured Outputをサポート。\"\"\"\n        models = self.resolve_models(model)\n        last_error = None\n        generation_config = config or {}\n\n        for m in models:\n            try:\n                response = await self.client.aio.models.generate_content(\n                    model=m, contents=contents, config=generation_config, **kwargs\n                )\n                return response\n            except errors.ClientError as e:\n                last_error = e\n                error_str = str(e).lower()\n                if any(code in error_str for code in [\"429\", \"500\", \"503\"]):\n                    continue\n                break # Prompt/Auth errors should not fallback\n            except Exception as e:\n                last_error = e\n                continue\n        raise last_error\n\n    async def embed_content(self, model: Union[str, List[str]], contents: Union[str, list], **kwargs):\n        \"\"\"フォールバックロジック付き非同期埋め込み。\"\"\"\n        models = self.resolve_models(model)\n        last_error = None\n        for m in models:\n            try:\n                return await self.client.aio.models.embed_content(model=m, contents=contents, **kwargs)\n            except Exception as e:\n                last_error = e\n                continue\n        raise last_error\n",
+    "description": "小説執筆システム向けの堅牢なLLMクライアントラッパー。Google Gemini APIの非同期呼び出し、マルチモデルフォールバック、プリセット管理、および構造化出力を統合しています。GIGO（Garbage In, Garbage Out）を防ぐための安定した推論基盤を提供します。",
+    "language": "python",
+    "tags": [
+        "#llm",
+        "#gemini",
+        "#novel-ai",
+        "#async"
+    ],
+    "reliability_score": 0.88,
+    "code_hash": "487a7b37900ca97a5d667d7588777769a4091c97369c7612d40c5dbe8b1b794c",
+    "dependencies": [
+        "google-genai",
+        "pyyaml"
+    ],
+    "test_code": ""
+}

@@ -1,0 +1,17 @@
+{
+    "name": "vector_service_wrapper",
+    "code": "from typing import Optional\nfrom sqlalchemy.orm import Session\n\nclass VectorServiceWrapper:\n    \"\"\"\n    High-level service wrapper for managing vector indexing and retrieval for novels.\n    \"\"\"\n    def __init__(self, config, manager):\n        self.config = config\n        self.manager = manager\n\n    async def index_novel(self, novel_obj: Any, db: Optional[Session] = None):\n        \"\"\"特定の作品のメタデータをインデックスに登録または更新する\"\"\"\n        try:\n            # 1. メタデータの更新\n            await self.manager.index_novel_metadata(novel_obj)\n            # 2. 本文の差分更新 (お気に入り or 読書中の場合のみ)\n            if novel_obj.preference == 1 or novel_obj.reading_status == 1:\n                await self.manager.index_novel_body_incremental(novel_obj, db)\n        except Exception as e:\n            raise e\n\n    async def search(self, query: str, limit: int = 50):\n        return await self.manager.search_similar_metadata(query, limit=limit)\n",
+    "description": "A high-level service wrapper for novel vector indexing and searching. Extracted from Novel AI Commander.",
+    "language": "python",
+    "tags": [
+        "vector-store",
+        "rag",
+        "indexing"
+    ],
+    "reliability_score": 0.9,
+    "code_hash": "11dcf6719e4be7b1f87e2c2c2026d0039da162321a2e35fe64fbd9c7bedb10c8",
+    "dependencies": [
+        "sqlalchemy"
+    ],
+    "test_code": ""
+}

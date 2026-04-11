@@ -1,0 +1,20 @@
+{
+    "id": "d9b8be9d-9269-47a4-b015-555c57c73487",
+    "project": "proj-b",
+    "name": "isolated_func",
+    "code": "def proj_b(): return 'B'",
+    "description": "",
+    "tags": [
+        "b_tag"
+    ],
+    "reliability_score": 1.0,
+    "test_metrics": {},
+    "language": "python",
+    "call_count": 0,
+    "code_hash": "hash-b",
+    "version": 1,
+    "dependencies": [],
+    "test_code": "",
+    "created_at": "2026-04-11 00:29:41",
+    "updated_at": "2026-04-11 00:29:41"
+}

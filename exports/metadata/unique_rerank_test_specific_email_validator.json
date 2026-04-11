@@ -1,0 +1,17 @@
+{
+    "id": "08e9cd2b-da85-4da1-8c2d-08fa35ace7fe",
+    "name": "unique_rerank_test_specific_email_validator",
+    "code": "import re\ndef validate_email_format(email): return bool(re.match(r'[^@]+@[^@]+\\.[^@]+', email))",
+    "description": "Specific tool for email address validation using strict regex rules.",
+    "tags": "[\"email\", \"validation\", \"regex\"]",
+    "reliability_score": 1.0,
+    "test_metrics": "{}",
+    "call_count": 0,
+    "organization_id": null,
+    "created_at": "2026-03-19 02:43:50",
+    "language": "python",
+    "code_hash": "733dfbb60a1d64f39f5130b7c17e363b32ff9b1733d3c27ce732c3e321afa08f",
+    "version": 1,
+    "dependencies": "[\"re\"]",
+    "test_code": ""
+}

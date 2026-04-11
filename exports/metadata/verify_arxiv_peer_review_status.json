@@ -1,0 +1,21 @@
+{
+    "name": "verify_arxiv_peer_review_status",
+    "code": "\nimport asyncio\nimport urllib.request\nimport urllib.parse\nimport xml.etree.ElementTree as ET\n\nclass ArxivTrustClassifier:\n    \"\"\"\n    Hybrid classifier for arXiv peer-review status.\n    Uses metadata (journal_ref, comment) and LLM inference as a fallback.\n    \"\"\"\n    def __init__(self, gemini_service):\n        self.gemini_service = gemini_service\n\n    async def classify(self, title: str, comment: str, journal_ref: str):\n        # 1. Metadata Heuristic\n        metadata_vetted = \"N/A\" != journal_ref or any(kw in comment.lower() for kw in [\"accepted\", \"published\", \"proceedings\", \"conference\", \"journal\"])\n        \n        # 2. LLM Inference\n        prompt = f\"Analyze if published in peer-reviewed venue.\\nTitle: {title}\\nComment: {comment}\\nRef: {journal_ref}\"\n        schema = {\n            \"type\": \"OBJECT\",\n            \"properties\": {\n                \"is_peer_reviewed\": {\"type\": \"BOOLEAN\"},\n                \"vetted_venue\": {\"type\": \"STRING\", \"nullable\": True},\n                \"confidence\": {\"type\": \"NUMBER\"},\n                \"reason\": {\"type\": \"STRING\"}\n            },\n            \"required\": [\"is_peer_reviewed\", \"vetted_venue\", \"confidence\", \"reason\"]\n        }\n        \n        result = await self.gemini_service.call_structured_async(prompt, response_schema=schema, tier=\"light\")\n        result[\"metadata_heuristic\"] = metadata_vetted\n        return result\n",
+    "description": "A hybrid classification logic to identify peer-review status of arXiv papers using metadata heuristics and LLM fallback. Optimized for speed and accuracy in professional reporting pipelines.",
+    "language": "python",
+    "tags": [
+        "arxiv",
+        "classification",
+        "llm-fallback",
+        "trust-level",
+        "academic-vanguard"
+    ],
+    "reliability_score": 0.85,
+    "code_hash": "006da9e85e676d21f78d0cf00e422846b68fa3822fec4cb31a95c1dac38e6dd6",
+    "dependencies": [
+        "asyncio",
+        "urllib",
+        "xml.etree.ElementTree"
+    ],
+    "test_code": "\n# Test with known published paper\nimport asyncio\nfrom unittest.mock import MagicMock\n\nasync def test_classify():\n    mock_gemini = MagicMock()\n    mock_gemini.call_structured_async = MagicMock(return_value=asyncio.Future())\n    mock_gemini.call_structured_async.return_value.set_result({\n        \"is_peer_reviewed\": True,\n        \"vetted_venue\": \"NIPS 2017\",\n        \"confidence\": 1.0,\n        \"reason\": \"Known historical paper\"\n    })\n    \n    classifier = ArxivTrustClassifier(mock_gemini)\n    res = await classifier.classify(\"Attention Is All You Need\", \"NIPS 2017\", \"N/A\")\n    assert res[\"is_peer_reviewed\"] == True\n    assert res[\"vetted_venue\"] == \"NIPS 2017\"\n\nif __name__ == \"__main__\":\n    asyncio.run(test_classify())\n    print(\"Test passed!\")\n"
+}

@@ -1,0 +1,17 @@
+{
+    "id": "b4c1656d-5d2c-4864-856f-7eb9fa00baad",
+    "name": "infer_path_from_content",
+    "code": "import re\n\ndef infer_path_from_content(content: str) -> str | None:\n    \"\"\"\n    Heuristically infers a file path from a leading comment in the code content.\n    Looks for patterns like '# filename: path/to/file.py' or '# path: file.py'.\n    \"\"\"\n    match = re.search(\n        r\"^#\\s*(?:filename|file|path):\\s*([a-zA-Z0-9_./-]+)\",\n        content,\n        re.MULTILINE,\n    )\n    if match:\n        return match.group(1).strip()\n    return None\n",
+    "description": "Infers file paths from source code comments using regex heuristics.",
+    "tags": "[\"utility\", \"heuristics\", \"file_management\"]",
+    "reliability_score": 0.925,
+    "test_metrics": "{}",
+    "call_count": 0,
+    "organization_id": null,
+    "created_at": "2026-03-14 14:11:44",
+    "language": "python",
+    "code_hash": "64a4fef3290c713c5a04991ce9a86a28eb2d0d71a7da8770c2f9426eaafe1bba",
+    "version": 1,
+    "dependencies": "[\"re\"]",
+    "test_code": ""
+}

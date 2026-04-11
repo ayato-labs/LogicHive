@@ -1,0 +1,17 @@
+{
+    "id": "5e1d35ed-6a60-415d-89dd-4886704fd8c7",
+    "name": "code_content_hasher_sha256",
+    "code": "def calculate_code_hash(code: str) -> str:\n    import hashlib\n    normalized_code = code.strip().replace('\\r\\n', '\\n')\n    return hashlib.sha256(normalized_code.encode('utf-8')).hexdigest()",
+    "description": "ソースコードのSHA-256ハッシュ値を計算します。空白の正規化と改行コードの統一（LF）を行います。",
+    "tags": "[\"hashing\", \"integrity\", \"utils\"]",
+    "reliability_score": 0.925,
+    "test_metrics": "{}",
+    "call_count": 0,
+    "organization_id": null,
+    "created_at": "2026-03-13 14:25:33",
+    "language": "python",
+    "code_hash": "644790dcbf86b454a79376f37f3cd51224f2b55f80b8dfc2586a40044fca2ed7",
+    "version": 1,
+    "dependencies": "[\"hashlib\"]",
+    "test_code": ""
+}

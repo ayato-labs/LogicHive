@@ -1,0 +1,17 @@
+{
+    "id": "892dcba9-5893-43d8-a745-9e2b3dd2d5f7",
+    "name": "test_valid_asset",
+    "code": "def calculate_sum(a: int, b: int) -> int:\n    return a + b",
+    "description": "A simple function to calculate the sum of two integers for arithmetic reuse.",
+    "tags": "[\"math\", \"utility\", \"sum\"]",
+    "reliability_score": 0.975,
+    "test_metrics": "{}",
+    "call_count": 0,
+    "organization_id": null,
+    "created_at": "2026-03-13 08:21:54",
+    "language": "python",
+    "code_hash": "51d70399ed5a33a31c64a5a1beea2ee0651191c8a24baeb05ab5efec2f9a0ffa",
+    "version": 1,
+    "dependencies": "[]",
+    "test_code": ""
+}

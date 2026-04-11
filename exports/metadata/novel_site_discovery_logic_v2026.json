@@ -1,0 +1,19 @@
+{
+    "name": "novel_site_discovery_logic_v2026",
+    "code": "import time\nimport random\nfrom typing import List, Dict, Any, Tuple\n\nasync def run_strategic_site_scan(site_clients: Dict[str, Any], scan_jobs: List[Tuple[str, bool, str]], limit: int = 50):\n    \"\"\"\n    「なろう」「ハーメルン」等の複数小説投稿サイトに対し、\n    ランキング種別（通常・R18）や条件を組み合わせて戦略的に広域スキャンを行う。\n    サーバー負荷に配慮したランダムウェイト付きのクロール制御ロジック。\n    \"\"\"\n    results = []\n    for site_id, is_r18, job_type in scan_jobs:\n        client = site_clients.get(site_id)\n        if not client: continue\n        \n        # サイトごとのランキング取得（実装に依存）\n        novels = await client.get_ranking(limit=limit, is_r18=is_r18)\n        results.extend(novels)\n        \n        # Anti-scraping measure: サーバー負荷への配慮\n        time.sleep(random.uniform(2.0, 5.0))\n        \n    return results\n",
+    "description": "複数の小説投稿サイトからランキングや新着情報を戦略的に収集する自動探索（Auto-Discovery）ロジック。サーバー負荷を考慮したウェイト調整、R18フラグのハンドリング、およびサイト横断的な巡回スケジューリングのパターンを含みます。",
+    "language": "python",
+    "tags": [
+        "#crawler",
+        "#novel-ai",
+        "#automation",
+        "#ranking-scan"
+    ],
+    "reliability_score": 0.9,
+    "code_hash": "facdfe9f837e5597bf6be57b96c0baddfaef510e662aa4942105028c96cc2f80",
+    "dependencies": [
+        "random",
+        "time"
+    ],
+    "test_code": ""
+}

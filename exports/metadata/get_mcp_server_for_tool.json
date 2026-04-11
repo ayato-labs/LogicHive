@@ -1,0 +1,17 @@
+{
+    "id": "1dc11853-d307-4797-bac7-8a52fe3947d6",
+    "name": "get_mcp_server_for_tool",
+    "code": "def get_mcp_server_for_tool(tool_name: str, tool_to_client_map: dict[str, str]) -> str | None:\n    \"\"\"\n    Identifies which MCP server owns a specific tool based on a registry map.\n    Returns None if the tool is not found.\n    \"\"\"\n    return tool_to_client_map.get(tool_name)\n",
+    "description": "Retrieves the target MCP server for a given tool name from a registry mapping.",
+    "tags": "[\"mcp\", \"dispatch\", \"utility\"]",
+    "reliability_score": 0.975,
+    "test_metrics": "{}",
+    "call_count": 0,
+    "organization_id": null,
+    "created_at": "2026-03-14 14:11:55",
+    "language": "python",
+    "code_hash": "84e129382f8d6ca5438ee5ef3580bd5a8e9c4795e05f627f684b2776626525e7",
+    "version": 1,
+    "dependencies": "[]",
+    "test_code": ""
+}

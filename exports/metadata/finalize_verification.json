@@ -1,0 +1,17 @@
+{
+    "id": "c0fb9a5c-fa91-4fd8-936d-f73a6fb722ee",
+    "name": "finalize_verification",
+    "code": "    def finalize_verification(\n        self,\n        name: str,\n        code: str,\n        llm_output: str,\n        description: str = \"\",\n        dependencies: List[str] = None,\n    ) -> Dict[str, Any]:\n        \"\"\"Combines Ruff static analysis with LLM-provided qualitative score.\"\"\"\n        # 1. Static Analysis (Hub-safe)\n        report = self.check_score_only(name, code, description, dependencies)\n\n        # 2. Extract LLM quantitative/qualitative data\n        try:\n            # Simple extractor for markdown JSON or raw JSON\n            import re\n\n            json_match = re.search(r\"\\{.*\\}\", llm_output, re.DOTALL)\n            if json_match:\n                data = json.loads(json_match.group())\n                ai_score = data.get(\"score\", 50)\n                ai_feedback = data.get(\"feedback\", \"\")\n\n                # Combine scores (Static 50% + AI 50%)\n                report[\"final_score\"] = int((report[\"final_score\"] + ai_score) / 2)\n                report[\"metadata\"][\"quality_feedback\"] = (\n                    f\"AI: {ai_feedback} | Hub: {report['formatter']['feedback']}\"\n                )\n        except Exception as e:\n            logger.warning(f\"QualityGate: Failed to parse LLM finalization: {e}\")\n\n        # Re-evaluate reliability tier\n        if report[\"final_score\"] >= 80:\n            report[\"reliability\"] = \"high\"\n        elif report[\"final_score\"] >= 50:\n            report[\"reliability\"] = \"medium\"\n        else:\n            report[\"reliability\"] = \"low\"\n\n        return report\n",
+    "description": "Combines Ruff static analysis with LLM-provided qualitative score.",
+    "tags": "[]",
+    "reliability_score": 1.0,
+    "test_metrics": "{}",
+    "call_count": 0,
+    "organization_id": "00000000-0000-0000-0000-000000000000",
+    "created_at": "2026-03-09 12:53:16",
+    "language": "python",
+    "code_hash": "08c7cf55e27998c9a795a2db8eda337b6aee968a6565ec74b36b8f32e8d82337",
+    "version": 1,
+    "dependencies": null,
+    "test_code": null
+}

@@ -1,0 +1,18 @@
+{
+    "name": "literature_reranker",
+    "code": "from typing import List, Dict, Any, Optional\nimport re\n\nclass LiteratureReranker:\n    \"\"\"\n    A specialized LLM-based reranker for creative writing context.\n    Reranks documents based on their relevance to a literary query.\n    \"\"\"\n    def __init__(self, client, model: str = \"gemini-2.0-flash\"):\n        self.client = client\n        self.model = model\n\n    async def rerank(self, query: str, documents: List[str], top_k: int = 5) -> List[str]:\n        if not documents:\n            return []\n        \n        if len(documents) <= top_k:\n            return documents\n\n        doc_list_str = \"\\n\".join([f\"[{i}] {doc[:500]}...\" for i, doc in enumerate(documents)])\n        \n        prompt = f\"\"\"\nあなたは超一流の文芸編集者です。\n与えられた「検索クエリ」に対して、以下の「情報リスト」の中から、物語の執筆に最も役立つと思われる上位{top_k}個を順に選んでください。\n\n【検索クエリ】\n{query}\n\n【情報リスト】\n{doc_list_str}\n\n【指示】\n- クエリ（現在の文脈や設定）との整合性が高いものを優先してください。\n- 出力は、選んだドキュメントのインデックス番号をカンマ区切りで、優先順位が高い順に並べてください（例: 3, 0, 5）。\n- 番号以外は何も出力しないでください。\n\"\"\"\n        try:\n            response = await self.client.generate_content(\n                model=self.model,\n                contents=prompt\n            )\n            text = response.text.strip()\n            indices = [int(i.strip()) for i in re.findall(r'\\d+', text)]\n            \n            reranked = []\n            for idx in indices:\n                if 0 <= idx < len(documents):\n                    reranked.append(documents[idx])\n                if len(reranked) >= top_k:\n                    break\n            \n            if not reranked:\n                return documents[:top_k]\n                \n            return reranked\n            \n        except Exception:\n            return documents[:top_k]\n",
+    "description": "LLM-based reranker specifically tuned for literary/creative writing relevance. Extracted from Novel AI Commander.",
+    "language": "python",
+    "tags": [
+        "rag",
+        "llm",
+        "creative-writing",
+        "reranking"
+    ],
+    "reliability_score": 0.9,
+    "code_hash": "3491e5f94153d5a637c84828f8029ba72f6ca815827e53c4ca5592ed99bda924",
+    "dependencies": [
+        "re"
+    ],
+    "test_code": ""
+}

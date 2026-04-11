@@ -1,0 +1,20 @@
+{
+    "name": "tunnel_visualizer_utils",
+    "code": "import httpx\nimport qrcode\nimport time\nimport sys\nfrom typing import Optional\n\ndef get_ngrok_public_url(port: int = 4040, max_retries: int = 10, delay: int = 2) -> Optional[str]:\n    \"\"\"\n    Retrieves the public URL from a running ngrok instance by querying its local API.\n    \n    Args:\n        port: The local port where ngrok's inspection API is running (default 4040).\n        max_retries: Maximum number of attempts to fetch the URL.\n        delay: Seconds to wait between retries.\n        \n    Returns:\n        The public URL string if found, otherwise None.\n    \"\"\"\n    api_url = f\"http://127.0.0.1:{port}/api/tunnels\"\n    for _ in range(max_retries):\n        try:\n            res = httpx.get(api_url)\n            tunnels = res.json().get(\"tunnels\", [])\n            if tunnels:\n                return tunnels[0][\"public_url\"]\n        except httpx.ConnectError:\n            # Expected if ngrok hasn't started yet, continue retrying\n            pass\n        except Exception as e:\n            # Print other unexpected errors to stderr instead of silent pass\n            print(f\"Warning: Unexpected error while polling ngrok: {e}\", file=sys.stderr)\n        \n        time.sleep(delay)\n    return None\n\ndef display_terminal_qr(data: str, title: Optional[str] = None):\n    \"\"\"\n    Generates an ASCII QR code for the given data and prints it to the terminal.\n    \"\"\"\n    if title:\n        print(f\"\\n{'='*50}\")\n        print(f\"  {title}\")\n        print(f\"{'='*50}\")\n    \n    print(f\"\\nData: {data}\\n\")\n    \n    qr = qrcode.QRCode(version=1, box_size=1, border=4)\n    qr.add_data(data)\n    qr.make(fit=True)\n    qr.print_ascii(invert=True)\n    print(\"\\nScan the QR code above to open the link on your mobile device.\")\n\ndef tunnel_visualizer(api_port: int = 4040):\n    \"\"\"\n    Unified helper to automatically fetch the ngrok URL and display its QR code.\n    Robust against connection retries but logs unexpected failures.\n    \"\"\"\n    url = get_ngrok_public_url(port=api_port)\n    if url:\n        display_terminal_qr(url, title=\"Tunnel Established\")\n    else:\n        print(\"Error: ngrok tunnel not found. Make sure ngrok is running and its API port is correct.\")\n",
+    "description": "A robust utility to retrieve and display ngrok tunnel status. Follows Phase 2 Hardening rules: explicitly handles ConnectError while logging other unexpected failures.",
+    "language": "python",
+    "tags": [
+        "ngrok",
+        "qr-code",
+        "tunneling",
+        "dev-tools",
+        "cli"
+    ],
+    "reliability_score": 0.88,
+    "code_hash": "6fcd45f1d15bc809db24eb01f7e3a1e02b072248a923f15b3a6c53531f5dafa1",
+    "dependencies": [
+        "httpx",
+        "qrcode"
+    ],
+    "test_code": ""
+}

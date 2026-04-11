@@ -1,0 +1,17 @@
+{
+    "id": "f222a524-57d2-48db-80c5-8564b5639954",
+    "name": "audit_test_955e3629_logic",
+    "code": "def add_numbers(a: int, b: int) -> int:\n    \"\"\"Updated version with docstring\"\"\"\n    return a + b",
+    "description": "Updated version of the sum function with better documentation.",
+    "tags": "[\"math\", \"utility\", \"updated\"]",
+    "reliability_score": 0.975,
+    "test_metrics": "{}",
+    "call_count": 0,
+    "organization_id": null,
+    "created_at": "2026-03-13 08:27:29",
+    "language": "python",
+    "code_hash": "da0c3ad66504a88cb8e98fcf5322ed36f16550aec61e3263f4236cd73dc28bc6",
+    "version": 2,
+    "dependencies": "[]",
+    "test_code": ""
+}

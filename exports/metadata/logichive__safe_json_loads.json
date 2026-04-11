@@ -1,0 +1,17 @@
+{
+    "id": "dc28e400-c53b-4c19-83dd-a30057ffd42c",
+    "name": "logichive__safe_json_loads",
+    "code": "def _safe_json_loads(data: Any, field_name: str) -> Any:\n    \"\"\"Helper to safely parse JSON strings and log errors.\"\"\"\n    if not data:\n        return data\n    try:\n        return json.loads(data)\n    except json.JSONDecodeError as e:\n        logger.warning(f\"SQLite: Failed to parse JSON for field '{field_name}': {e}. Raw data: {data}\")\n        return data  # Return raw as fallback or None depending on preference, returning raw for safety.",
+    "description": "LogicHiveプロジェクト内部から抽出されたモジュール化ロジック: _safe_json_loads (src/storage/sqlite_api.py)",
+    "tags": "[\"internal\", \"logichive\", \"src\", \"_safe_json_loads\"]",
+    "reliability_score": 0.925,
+    "test_metrics": "{}",
+    "call_count": 0,
+    "organization_id": null,
+    "created_at": "2026-03-13 14:27:40",
+    "language": "python",
+    "code_hash": "7faefb96cfc9eb7bf1f30ae32c50e0583c9903042378fc33944a82d75087ffa7",
+    "version": 1,
+    "dependencies": "[]",
+    "test_code": ""
+}

@@ -1,0 +1,17 @@
+{
+    "id": "9481acba-6944-4246-a117-01396e1c6065",
+    "name": "demo_rank_audit_trail_logger_with_rotation",
+    "code": "import logging\nfrom logging.handlers import RotatingFileHandler\n# Complex logging setup with rotation...",
+    "description": "Professional audit-trail logger supporting file rotation and log levels.",
+    "tags": "[\"logging\", \"audit\", \"professional\"]",
+    "reliability_score": 1.0,
+    "test_metrics": "{}",
+    "call_count": 0,
+    "organization_id": null,
+    "created_at": "2026-03-19 04:56:17",
+    "language": "python",
+    "code_hash": "a56f8866b02aac0c4e07ab474348b008c3b8463b3d83f49150488ae368e73bde",
+    "version": 1,
+    "dependencies": "[]",
+    "test_code": ""
+}

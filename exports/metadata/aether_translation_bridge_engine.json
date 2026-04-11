@@ -1,0 +1,25 @@
+{
+    "name": "aether_translation_bridge_engine",
+    "code": "import json\nimport os\nimport sys\n\nfrom dotenv import load_dotenv\nfrom google import genai\n\n\ndef get_client():\n    \"\"\"Helper to initialize and return the genai Client with robust .env lookup.\"\"\"\n    # Prioritize local .env in the project directory\n    load_dotenv(\".env\", override=True)\n\n    api_key = os.getenv(\"GOOGLE_API_KEY\")\n    if api_key:\n        api_key = api_key.strip('\"').strip(\"'\")\n\n    if not api_key:\n        # Fallback to parent directory (common in multi-layer projects)\n        dotenv_path = os.path.join(os.getcwd(), \"..\", \".env\")\n        load_dotenv(dotenv_path)\n        api_key = os.getenv(\"GOOGLE_API_KEY\")\n        if api_key:\n            api_key = api_key.strip('\"').strip(\"'\")\n\n    if not api_key:\n        raise ValueError(\"GOOGLE_API_KEY not found in .env (checked local and parent)\")\n\n    client = genai.Client(api_key=api_key)\n    return client\n\n\ndef ping():\n    \"\"\"Verify API connectivity with a minimal request (Readiness Probe).\"\"\"\n    try:\n        client = get_client()\n        response = client.models.generate_content(\n            model=\"gemma-3-27b-it\", contents=\"Say 'OK'\"\n        )\n        return response and response.text\n    except Exception as e:\n        raise ConnectionError(f\"API Connectivity Check Failed: {e}\")\n\n\ndef translate_text(text, model_id=\"gemma-3-27b-it\"):\n    \"\"\"\n    Core translation logic for Japanese-to-English technical prompts.\n    Appends the mandatory '(Must respond in Japanese)' instruction.\n    \"\"\"\n    client = get_client()\n    prompt = f\"Translate the following Japanese text to English. Output ONLY the English translation. After the translation, add ' (Must respond in Japanese)'.\\n\\nJapanese Text: {text}\"\n\n    response = client.models.generate_content(model=model_id, contents=prompt)\n    if response and response.text:\n        return response.text.strip()\n    else:\n        raise ValueError(\"Empty response from AI\")\n\n\ndef main():\n    \"\"\"CLI entry point for Node.js bridge consumption.\"\"\"\n    if len(sys.argv) < 2:\n        print(\"Usage: python translator.py <text>\", file=sys.stderr)\n        sys.exit(1)\n\n    text = \" \".join(sys.argv[1:])\n    try:\n        translated = translate_text(text)\n        print(json.dumps({\"translatedText\": translated}))\n    except Exception as e:\n        # Emit errors as JSON for clean bridge parsing\n        print(json.dumps({\"error\": str(e)}), file=sys.stderr)\n        sys.exit(1)\n\n\nif __name__ == \"__main__\":\n    main()\n",
+    "description": "High-reliability translation bridge for AetherCursor. Orchestrates Japanese-to-English translation using Gemma models (Google AI Studio). Features robust .env loading (local/parent), an authentication readiness probe (ping), and consistent JSON error reporting for seamless Node.js bridge integration. Ideal for complex multi-language prompting scenarios.",
+    "language": "python",
+    "tags": [
+        "python",
+        "translation",
+        "google-genai",
+        "gemma",
+        "bridge",
+        "aethercursor",
+        "japanese-resolution"
+    ],
+    "reliability_score": 0.88,
+    "code_hash": "6b7440069de2afb3a0ffb0e4b18ee7c14870d2812907e82f9baed1a100d9fea9",
+    "dependencies": [
+        "json",
+        "os",
+        "sys",
+        "python-dotenv",
+        "google-genai"
+    ],
+    "test_code": "import pytest\nfrom unittest.mock import MagicMock, patch\n\ndef test_translation_logic_mocked():\n    from aether_tools.translator import translate_text\n    \n    with patch(\"aether_tools.translator.get_client\") as mock_get:\n        mock_client = MagicMock()\n        mock_get.return_value = mock_client\n        \n        mock_response = MagicMock()\n        mock_response.text = \"Hello (Must respond in Japanese)\"\n        mock_client.models.generate_content.return_value = mock_response\n        \n        result = translate_text(\"こんにちは\")\n        assert \"Hello\" in result\n        assert \"(Must respond in Japanese)\" in result\n"
+}

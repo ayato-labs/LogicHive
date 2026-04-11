@@ -1,0 +1,17 @@
+{
+    "id": "d0fc9f5a-b2fb-4fd2-a194-083aa69388f8",
+    "name": "normalize_llm_args",
+    "code": "import re\nfrom typing import Any\n\ndef normalize_llm_args(args: dict[str, Any]) -> dict[str, Any]:\n    \"\"\"\n    Physically remaps common LLM argument hallucinations to standardized keys.\n    Prevents tool call failures due to slightly off key naming (e.g., 'file_path' instead of 'path').\n    \"\"\"\n    if not isinstance(args, dict):\n        return args\n    hallucinations = {\n        \"file_path\": \"path\",\n        \"filepath\": \"path\",\n        \"file\": \"path\",\n        \"code\": \"content\",\n        \"source\": \"content\",\n        \"text\": \"content\",\n    }\n    for old, new in hallucinations.items():\n        if old in args and new not in args:\n            args[new] = args.pop(old)\n    return args\n",
+    "description": "Remaps common LLM tool call argument hallucinations to standardized keys. Essential for robust MCP tool execution.",
+    "tags": "[\"llm\", \"mcp_client\", \"hallucination_fix\", \"utility\"]",
+    "reliability_score": 0.925,
+    "test_metrics": "{}",
+    "call_count": 0,
+    "organization_id": null,
+    "created_at": "2026-03-14 14:08:30",
+    "language": "python",
+    "code_hash": "94da1633329b07a519508f886a53d0573c1e28550a27c901425abd1f4922e332",
+    "version": 1,
+    "dependencies": "[\"re\"]",
+    "test_code": ""
+}

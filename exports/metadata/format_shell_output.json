@@ -1,0 +1,17 @@
+{
+    "id": "39443439-e43c-434f-a076-5de69630a0de",
+    "name": "format_shell_output",
+    "code": "def format_shell_output(stdout: str, stderr: str, returncode: int) -> str:\n    \"\"\"\n    Standardizes the display of shell command results for AI consumption.\n    Includes success/failure status and unified output block.\n    \"\"\"\n    output = str(stdout) + str(stderr)\n    status = \"SUCCESS\" if returncode == 0 else f\"FAILED (Exit {returncode})\"\n    return f\"[{status}]\\\\n{output}\"\n",
+    "description": "Standardizes shell command results into a readable format for AI agents.",
+    "tags": "[\"utility\", \"shell\", \"formatting\"]",
+    "reliability_score": 0.925,
+    "test_metrics": "{}",
+    "call_count": 0,
+    "organization_id": null,
+    "created_at": "2026-03-14 14:11:49",
+    "language": "python",
+    "code_hash": "f464ba996c7b2480deac7df7df086acd507af74e505d94238c44255cc5aa89e6",
+    "version": 1,
+    "dependencies": "[]",
+    "test_code": ""
+}

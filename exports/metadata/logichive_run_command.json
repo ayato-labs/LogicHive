@@ -1,0 +1,17 @@
+{
+    "id": "55c3de16-0a16-46e6-8cab-065894c3fb3a",
+    "name": "logichive_run_command",
+    "code": "def run_command(command, check=True):\n    print(f\"[EXEC] {' '.join(command)}\")\n    result = subprocess.run(command, capture_output=True, text=True)\n    if check and result.returncode != 0:\n        print(f\"[ERROR] {result.stderr}\")\n        sys.exit(result.returncode)\n    return result",
+    "description": "LogicHiveプロジェクト内部から抽出されたモジュール化ロジック: run_command (ci_cd/cd_github.py)",
+    "tags": "[\"internal\", \"logichive\", \"ci_cd\", \"run_command\"]",
+    "reliability_score": 0.925,
+    "test_metrics": "{}",
+    "call_count": 0,
+    "organization_id": null,
+    "created_at": "2026-03-13 14:27:49",
+    "language": "python",
+    "code_hash": "8562b49820c11a95fe1112809f96298c40f7714b0aea3287d8766c0696ca03fc",
+    "version": 1,
+    "dependencies": "[]",
+    "test_code": ""
+}

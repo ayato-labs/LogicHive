@@ -1,0 +1,17 @@
+{
+    "id": "8ce09f0f-70bd-487f-9a24-f122f2f76a92",
+    "name": "normalize_container_path",
+    "code": "def normalize_container_path(path: str) -> str:\n    \"\"\"\n    Converts Windows-style paths to POSIX-style paths for compatibility with Docker containers.\n    \"\"\"\n    return path.replace(\"\\\\\\\\\", \"/\")\n",
+    "description": "Converts Windows paths to POSIX-style paths for Docker container compatibility.",
+    "tags": "[\"utility\", \"docker\", \"path\"]",
+    "reliability_score": 0.875,
+    "test_metrics": "{}",
+    "call_count": 0,
+    "organization_id": null,
+    "created_at": "2026-03-14 14:11:59",
+    "language": "python",
+    "code_hash": "283e445e929a7abe4e9d9da6a4cb1d083c955f923e9f731005f4b4910904ae94",
+    "version": 1,
+    "dependencies": "[]",
+    "test_code": ""
+}

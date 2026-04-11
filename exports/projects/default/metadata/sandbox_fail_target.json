@@ -1,0 +1,22 @@
+{
+    "id": "5a320a45-dd21-4581-b59e-02adf0eed213",
+    "project": "default",
+    "name": "sandbox_fail_target",
+    "code": "def sandbox_fail_func():\n    return False",
+    "description": "[AI-DRAFT] Experimental function designed to fail validation.",
+    "tags": [
+        "test",
+        "sandbox",
+        "fail"
+    ],
+    "reliability_score": 0.5,
+    "test_metrics": {},
+    "language": "python",
+    "call_count": 0,
+    "code_hash": "f91f55993f9d902cbd47d43dffc989e1ce93fd3b12eef205c7152da138b2160e",
+    "version": 1,
+    "dependencies": [],
+    "test_code": "assert sandbox_fail_func() == True\nprint('Should not reach here')",
+    "created_at": "2026-04-09 23:42:17",
+    "updated_at": "2026-04-09 23:42:17"
+}

@@ -1,0 +1,17 @@
+{
+    "id": "6fb812d8-08a6-48b1-b470-a05001eaf2a3",
+    "name": "demo_rank_json_formatter_logger",
+    "code": "import json\ndef log_json(data): print(json.dumps({'log': data}))",
+    "description": "Logs data in JSON format for structured analysis.",
+    "tags": "[\"logging\", \"json\"]",
+    "reliability_score": 1.0,
+    "test_metrics": "{}",
+    "call_count": 0,
+    "organization_id": null,
+    "created_at": "2026-03-19 04:56:16",
+    "language": "python",
+    "code_hash": "9b3a4884c60f67131687b704d7c382febc589e6dc5f7938f79bd1a1987f2fea5",
+    "version": 1,
+    "dependencies": "[]",
+    "test_code": ""
+}

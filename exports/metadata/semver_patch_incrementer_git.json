@@ -1,0 +1,17 @@
+{
+    "id": "c3c3935b-244c-4475-a066-d624bc579e38",
+    "name": "semver_patch_incrementer_git",
+    "code": "def get_next_version(git_tags: list[str], default_start: str = 'v1.0.0') -> str:\n    if not git_tags or git_tags == ['']:\n        return default_start\n    def version_key(v):\n        try:\n            return list(map(int, v[1:].split('.')))\n        except:\n            return [0, 0, 0]\n    valid_tags = [t for t in git_tags if t.startswith('v') and '.' in t]\n    if not valid_tags:\n        return default_start\n    valid_tags.sort(key=version_key)\n    latest = valid_tags[-1]\n    parts = version_key(latest)\n    parts[-1] += 1\n    return f\"v{'.'.join(map(str, parts))}\" ",
+    "description": "Gitのタグリストを受け取り、セマンティックバージョニング（vX.Y.Z形式）に基づいて次のパッチ番号を生成します。",
+    "tags": "[\"git\", \"cicd\", \"automation\"]",
+    "reliability_score": 0.925,
+    "test_metrics": "{}",
+    "call_count": 0,
+    "organization_id": null,
+    "created_at": "2026-03-13 14:25:41",
+    "language": "python",
+    "code_hash": "4d5e9bbc6caefb4ad5fadb3c3707d5e683fe112486d54aede66899e3b3fe5c27",
+    "version": 1,
+    "dependencies": "[]",
+    "test_code": ""
+}

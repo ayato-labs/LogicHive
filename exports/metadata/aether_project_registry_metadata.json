@@ -1,0 +1,17 @@
+{
+    "name": "aether_project_registry_metadata",
+    "code": "def get_aether_project_metadata():\n    \"\"\"\n    Returns the architectural highlights and certification status of AetherCursor.\n    This serves as a project registry for future session recall.\n    \"\"\"\n    return {\n        \"project\": \"AetherCursor\",\n        \"description\": \"Cross-platform PC Remote Control Development Suite\",\n        \"certification_status\": \"100% (18/18 Environments Passed)\",\n        \"certification_matrix\": {\n            \"OS\": [\"ubuntu-latest\", \"windows-latest\"],\n            \"Node.js\": [\"18\", \"20\", \"22\"],\n            \"Python\": [\"3.10\", \"3.11\", \"3.12\"]\n        },\n        \"key_patterns\": [\n            \"Luxurious Proof (贅沢な証跡) - Automated matrix reporting\",\n            \"Dual-Path Installation - Resolving ENOTDIR/ENOENT platform issues\",\n            \"Dynamic Dependency Patching - Removing Windows-only deps on Linux\",\n            \"Professional Quality Audit - Automated Ruff integration\"\n        ],\n        \"registered_logic_hive_assets\": [\n            \"github_actions_luxurious_certification_engine\",\n            \"aether_translation_bridge_engine\"\n        ]\n    }\n",
+    "description": "A project-wide architectural registry for AetherCursor. Encapsulates the successful 18-way matrix certification facts, key implementation patterns (Luxurious Proof, Dual-Path Installation), and references to other archived LogicHive assets. Serves as 'On-Vault Memory' for project continuity.",
+    "language": "python",
+    "tags": [
+        "metadata",
+        "project-archive",
+        "certification-facts",
+        "aethercursor",
+        "architecture-DNA"
+    ],
+    "reliability_score": 0.94,
+    "code_hash": "67daeaec59fb86082bba8fc8ddad2c93c7bd2395b55e429d3b3cb94e34ec192d",
+    "dependencies": [],
+    "test_code": "def test_metadata_completeness():\n    from aether_tools.registry import get_aether_project_metadata\n    meta = get_aether_project_metadata()\n    assert meta[\"project\"] == \"AetherCursor\"\n    assert \"Luxurious Proof\" in str(meta[\"key_patterns\"])\n"
+}

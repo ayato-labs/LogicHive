@@ -1,0 +1,16 @@
+{
+    "name": "sanitize_string_category_v1",
+    "code": "def _sanitize_category(self, category: str) -> str:\n    \"\"\"\n    Normalizes and sanitizes the category string to ensure database safety and consistency.\n    Removes non-printable characters, strips whitespace, and enforces a length limit.\n    \"\"\"\n    if not category or not isinstance(category, str):\n        return \"News\"\n    sanitized = \"\".join(ch for ch in category if ch.isprintable()).strip()\n    if not sanitized:\n        return \"News\"\n    return sanitized[:50]\n",
+    "description": "A string sanitization utility for normalizing category names. Prevents non-printable character injection and enforces length limits, with a safe fallback to 'News'. Useful for maintaining data integrity in shared database environments.",
+    "language": "python",
+    "tags": [
+        "utilities",
+        "sanitization",
+        "string-manipulation",
+        "data-integrity"
+    ],
+    "reliability_score": 0.9,
+    "code_hash": "56068c48f3d0d7be216735704f0c29556a242a3beff001ba74b55bbc929eaf24",
+    "dependencies": [],
+    "test_code": ""
+}

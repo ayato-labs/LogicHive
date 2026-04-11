@@ -1,0 +1,17 @@
+{
+    "id": "34ca3031-9120-4573-ac82-f4d85d75da1d",
+    "name": "logichive_get_next_version",
+    "code": "def get_next_version():\n    \"\"\"Fetches the latest v* tag and increments the patch version.\"\"\"\n    try:\n        result = subprocess.run(\n            [\"git\", \"tag\", \"-l\", \"v*\"], capture_output=True, text=True\n        )\n        tags = result.stdout.strip().split(\"\\n\")\n        if not tags or tags == [\"\"]:\n            return \"v2.2.1\"  # Default starting point for this branch\n\n        # Sort and get latest\n        tags.sort(key=lambda s: list(map(int, s[1:].split(\".\"))))\n        latest = tags[-1]\n\n        parts = list(map(int, latest[1:].split(\".\")))\n        parts[-1] += 1\n        return f\"v{'.'.join(map(str, parts))}\"\n    except Exception as e:\n        print(f\"[WARNING] Could not determine next version: {e}\")\n        return None",
+    "description": "LogicHiveプロジェクト内部から抽出されたモジュール化ロジック: get_next_version (ci_cd/cd_github.py)",
+    "tags": "[\"internal\", \"logichive\", \"ci_cd\", \"get_next_version\"]",
+    "reliability_score": 0.875,
+    "test_metrics": "{}",
+    "call_count": 0,
+    "organization_id": null,
+    "created_at": "2026-03-13 14:27:58",
+    "language": "python",
+    "code_hash": "14675c08959085167a3a630ae2be0df9ddb16d950d5d1338b05499c7ed28bc08",
+    "version": 1,
+    "dependencies": "[]",
+    "test_code": ""
+}

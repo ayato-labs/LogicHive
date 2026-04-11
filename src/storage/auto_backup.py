@@ -190,6 +190,14 @@ class AutoBackupManager:
 
         logger.debug(f"AutoBackup: Exported '{name}' in project '{project}' to {self.export_dir}")
 
+    async def bulk_export(self, assets: list[dict[str, Any]]) -> None:
+        """
+        Exports multiple assets to files.
+        """
+        for asset in assets:
+            await self.export_asset(asset)
+        logger.info(f"AutoBackup: Bulk export completed for {len(assets)} assets.")
+
     async def bulk_sync_to_git(self) -> None:
         """
         Performs a single commit and push for all exported assets.

@@ -1,0 +1,17 @@
+{
+    "id": "9b8efad1-5fa5-4cc2-b2a3-dcda8b033fbf",
+    "name": "final_test_v2_simple",
+    "code": "print('hi')",
+    "description": "Simple greeting script.",
+    "tags": "[\"test\"]",
+    "reliability_score": 0.604,
+    "test_metrics": "{}",
+    "call_count": 0,
+    "organization_id": null,
+    "created_at": "2026-03-19 05:18:00",
+    "language": "python",
+    "code_hash": "c2d0a5e0790d97a015387a995c0d0b5eb3e88138466586fc980787c9b1731eb8",
+    "version": 1,
+    "dependencies": "[]",
+    "test_code": ""
+}

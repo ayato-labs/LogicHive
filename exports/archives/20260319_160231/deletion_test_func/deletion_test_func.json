@@ -1,0 +1,14 @@
+{
+    "name": "deletion_test_func",
+    "code": "def hello_world():\n    \"\"\"\n    This is a test function for the deletion and archiving mechanism.\n    It returns a friendly greeting.\n    \"\"\"\n    msg = \"Hello from LogicHive deletion test!\"\n    print(msg)\n    return msg\n",
+    "description": "A robust test function designed to pass quality gates for the deletion and archiving verification test.",
+    "language": "python",
+    "tags": [
+        "test",
+        "utility"
+    ],
+    "reliability_score": 0.9,
+    "code_hash": "aaf6a9a6d6f42510ba1fdfcb9ee7d028e35fa30c53f5119ae17361c6f50771c9",
+    "dependencies": [],
+    "test_code": ""
+}

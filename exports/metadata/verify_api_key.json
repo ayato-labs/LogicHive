@@ -1,0 +1,17 @@
+{
+    "id": "de643c6d-fe8e-4ecd-9504-d64ee2e85bb4",
+    "name": "verify_api_key",
+    "code": "def verify_api_key(key: str):\n    \"\"\"Verifies an API key against the database.\"\"\"\n    conn = duckdb.connect(str(API_KEYS_DB_PATH), read_only=True)\n    try:\n        # Table must already exist. If not, select will fail.\n        res = conn.execute(\n            \"SELECT user_id FROM api_keys WHERE key = ?\", [key]\n        ).fetchone()\n        if res:\n            return True, res[0]\n        return False, None\n    except Exception:\n        # If table doesn't exist yet, it's not a valid key\n        return False, None\n    finally:\n        conn.close()\n",
+    "description": "Verifies an API key against the database.",
+    "tags": "[]",
+    "reliability_score": 1.0,
+    "test_metrics": "{}",
+    "call_count": 0,
+    "organization_id": "00000000-0000-0000-0000-000000000000",
+    "created_at": "2026-03-09 12:47:44",
+    "language": "python",
+    "code_hash": "4f65bde3aa594bc963bd44f9bbc248596882232f86a0d3f302bd36c9b928c708",
+    "version": 1,
+    "dependencies": null,
+    "test_code": null
+}

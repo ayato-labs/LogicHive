@@ -1,0 +1,17 @@
+{
+    "id": "1d535df5-1d22-4be1-b533-9c042a6f0298",
+    "name": "logichive_main",
+    "code": "def main():\n    print(\"=== LogicHive Edge CD (GitHub) ===\")\n    print(\"[NOTE] Linting and Testing are now handled by GitHub Actions CI.\")\n\n    # 1. Versioning\n    next_ver = get_next_version()\n    print(f\"\\n[INFO] Target Version: {next_ver}\")\n\n    # 2. Check for changes\n    status = run_command([\"git\", \"status\", \"--porcelain\"])\n    if not status.stdout.strip():\n        # Check if we should still release even if no code changes (e.g. forced update)\n        print(\"\\n[INFO] No changes to deploy to GitHub.\")\n        return\n\n    # 3. Add and commit\n    print(\"\\n[INFO] Committing changes...\")\n    run_command([\"git\", \"add\", \".\"])\n\n    try:\n        commit_msg = input(\n            f\"Enter commit message (Enter for 'release: {next_ver}'): \"\n        ).strip()\n    except EOFError:\n        commit_msg = \"\"\n\n    if not commit_msg:\n        commit_msg = f\"release: {next_ver}\"\n\n    run_command([\"git\", \"commit\", \"-m\", commit_msg])\n\n    # 4. Tag and Push\n    if next_ver:\n        print(f\"\\n[INFO] Tagging with {next_ver}...\")\n        run_command([\"git\", \"tag\", next_ver])\n\n    print(\"\\n[INFO] Pushing to GitHub (origin main and tags)...\")\n    run_command([\"git\", \"push\", \"origin\", \"main\"])\n    if next_ver:\n        run_command([\"git\", \"push\", \"origin\", next_ver])\n\n    print(\"\\n[SUCCESS] Edge changes pushed!\")\n    print(\"[INFO] GitHub Actions CI/CD will now run tests and build the EXE.\")",
+    "description": "LogicHiveプロジェクト内部から抽出されたモジュール化ロジック: main (ci_cd/cd_github.py)",
+    "tags": "[\"internal\", \"logichive\", \"ci_cd\", \"main\"]",
+    "reliability_score": 0.825,
+    "test_metrics": "{}",
+    "call_count": 0,
+    "organization_id": null,
+    "created_at": "2026-03-13 14:28:11",
+    "language": "python",
+    "code_hash": "3f1438e75051fe458ce7a4efe2511b57e9d8cabdf24178c42b4227aa8a959df5",
+    "version": 1,
+    "dependencies": "[]",
+    "test_code": ""
+}

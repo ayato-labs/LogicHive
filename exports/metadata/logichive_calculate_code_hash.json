@@ -1,0 +1,17 @@
+{
+    "id": "38f26487-7852-46fe-b3ca-55aac1e08ccb",
+    "name": "logichive_calculate_code_hash",
+    "code": "def calculate_code_hash(code: str) -> str:\n    \"\"\"\n    Calculates a SHA-256 hash for the given source code.\n    Normalization: Basic whitespace stripping to avoid trivial mismatches.\n    \"\"\"\n    # Normalize: strip leading/trailing whitespace and ensure consistent line endings\n    normalized_code = code.strip().replace(\"\\r\\n\", \"\\n\")\n\n    # Generate SHA-256 hash\n    return hashlib.sha256(normalized_code.encode(\"utf-8\")).hexdigest()",
+    "description": "LogicHiveプロジェクト内部から抽出されたモジュール化ロジック: calculate_code_hash (src/core/hash_utils.py)",
+    "tags": "[\"internal\", \"logichive\", \"src\", \"calculate_code_hash\"]",
+    "reliability_score": 0.925,
+    "test_metrics": "{}",
+    "call_count": 0,
+    "organization_id": null,
+    "created_at": "2026-03-13 14:27:32",
+    "language": "python",
+    "code_hash": "b74c689cd03fd1ff75daef04dc83b08276860838e65573cebd19251029401a27",
+    "version": 1,
+    "dependencies": "[]",
+    "test_code": ""
+}

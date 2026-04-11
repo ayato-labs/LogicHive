@@ -1,0 +1,21 @@
+{
+    "name": "WhisperTranscriber_v1_faster",
+    "code": "import logging\nimport os\nimport subprocess\nimport time\nimport numpy as np\nimport psutil\nimport torch\nfrom faster_whisper import WhisperModel\n\nlogger = logging.getLogger(__name__)\n\nclass WhisperTranscriber:\n    \"\"\"\n    Backend class for Whisper transcription logic using faster-whisper.\n    Handles hardware detection (VRAM/RAM), model loading, and transcription.\n    \"\"\"\n    MODEL_REQUIREMENTS = {\n        \"tiny\": 0.3, \"base\": 0.5, \"small\": 1.0, \"medium\": 2.5, \"large-v3\": 3.5, \"turbo\": 2.0,\n    }\n\n    def __init__(self):\n        self.model = None\n        self.current_model_name = None\n        self._hardware_info = None\n        self.device = \"cuda\" if torch.cuda.is_available() else \"cpu\"\n        self.last_warning = \"\"\n\n    @staticmethod\n    def _detect_vram_nvidia_smi():\n        try:\n            result = subprocess.run(\n                [\"nvidia-smi\", \"--query-gpu=memory.total\", \"--format=csv,noheader,nounits\"],\n                capture_output=True, text=True, timeout=5,\n            )\n            if result.returncode == 0 and result.stdout.strip():\n                vram_mb = float(result.stdout.strip().split(\"\\n\")[0])\n                return round(vram_mb / 1024, 1)\n        except Exception as e:\n            logger.debug(f\"nvidia-smi check failed: {e}\")\n        return 0.0\n\n    def get_hardware_info(self):\n        if self._hardware_info is not None: return self._hardware_info\n        info = {\"vram\": 0.0, \"ram\": round(psutil.virtual_memory().total / (1024**3), 1)}\n        info[\"vram\"] = self._detect_vram_nvidia_smi()\n        if info[\"vram\"] == 0.0 and torch.cuda.is_available():\n            info[\"vram\"] = round(torch.cuda.get_device_properties(0).total_memory / (1024**3), 1)\n        self._hardware_info = info\n        return info\n\n    def load_model(self, model_name=\"base\", force_gpu=False):\n        device = \"cuda\" if force_gpu or (self.get_hardware_info()[\"vram\"] >= self.MODEL_REQUIREMENTS.get(model_name, 1.0)) else \"cpu\"\n        compute_type = \"float16\" if device == \"cuda\" else \"int8\"\n        if self.model is None or self.current_model_name != model_name:\n            self.model = WhisperModel(model_name, device=device, compute_type=compute_type)\n            self.current_model_name = model_name\n        return self.model\n\n    def transcribe(self, path_or_io, model_name=\"base\", force_gpu=False):\n        self.load_model(model_name, force_gpu=force_gpu)\n        segments, info = self.model.transcribe(path_or_io, beam_size=5)\n        full_text = \"\".join([segment.text for segment in segments]).strip()\n        return full_text\n",
+    "description": "High-performance Whisper transcription class leveraging the faster-whisper engine. Includes sophisticated hardware detection (VRAM/RAM auditing) to safely choose between CUDA and CPU. Optimized for both performance (float16) and compatibility (int8). Supports various input formats including paths and numpy arrays.",
+    "language": "python",
+    "tags": [
+        "#whisper",
+        "#transcription",
+        "#faster-whisper",
+        "#ai-processing"
+    ],
+    "reliability_score": 0.88,
+    "code_hash": "2709517d1dad3331075f76809c345b40cf18a61131d18b2918326cc5c35edeca",
+    "dependencies": [
+        "faster-whisper",
+        "torch",
+        "psutil",
+        "numpy"
+    ],
+    "test_code": "from unittest.mock import MagicMock, patch\nimport numpy as np\n\ndef test_transcriber_init():\n    transcriber = WhisperTranscriber()\n    assert transcriber.model is None\n\ndef test_hardware_info():\n    transcriber = WhisperTranscriber()\n    info = transcriber.get_hardware_info()\n    assert \"ram\" in info\n    assert \"vram\" in info\n"
+}

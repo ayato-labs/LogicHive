@@ -1,0 +1,17 @@
+{
+    "id": "8c493b4f-ab45-4e62-9134-8a688a799b11",
+    "name": "demo_rank_simple_logger",
+    "code": "def log(msg): print(f'[LOG] {msg}')",
+    "description": "A very basic print-based logger for strings.",
+    "tags": "[\"logging\", \"simple\"]",
+    "reliability_score": 1.0,
+    "test_metrics": "{}",
+    "call_count": 0,
+    "organization_id": null,
+    "created_at": "2026-03-19 04:56:16",
+    "language": "python",
+    "code_hash": "046a657551444ca8b636d8f84c91d5344a4a3710b507ec852cb17577938e33fc",
+    "version": 1,
+    "dependencies": "[]",
+    "test_code": ""
+}

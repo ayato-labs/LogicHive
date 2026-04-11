@@ -1,0 +1,17 @@
+{
+    "id": "27671a04-00e4-41ce-b1a8-ef1abec495a4",
+    "name": "extract_python_dependencies_ast",
+    "code": "def extract_python_dependencies(code: str) -> list[str]:\n    import ast\n    dependencies = set()\n    try:\n        tree = ast.parse(code)\n        for node in ast.walk(tree):\n            if isinstance(node, ast.Import):\n                for alias in node.names:\n                    base = alias.name.split('.')[0]\n                    dependencies.add(base)\n            elif isinstance(node, ast.ImportFrom):\n                if node.level == 0 and node.module:\n                    base = node.module.split('.')[0]\n                    dependencies.add(base)\n    except SyntaxError:\n        return []\n    \n    std_lib = {'os', 'sys', 'json', 'math', 'datetime', 'typing', 'asyncio', 'logging', 'ast', 'pathlib', 'uuid', 'abc'}\n    return sorted(list(dependencies - std_lib))",
+    "description": "PythonのソースコードからAST（抽象構文木）を利用して、トップレベルの依存関係（import）を抽出します。",
+    "tags": "[\"ast\", \"analysis\", \"dependency-management\"]",
+    "reliability_score": 0.925,
+    "test_metrics": "{}",
+    "call_count": 0,
+    "organization_id": null,
+    "created_at": "2026-03-13 14:25:29",
+    "language": "python",
+    "code_hash": "92297684ba88ef01776e56edfeaa94152cc366a2f08cec0d241d1a3ba57dd5d9",
+    "version": 1,
+    "dependencies": "[\"ast\"]",
+    "test_code": ""
+}

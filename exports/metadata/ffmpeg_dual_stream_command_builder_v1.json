@@ -1,0 +1,20 @@
+{
+    "name": "ffmpeg_dual_stream_command_builder_v1",
+    "code": "import subprocess\nfrom pathlib import Path\n\ndef build_ffmpeg_recording_command(\n    device_name: str,\n    output_sample_rate: int = 16000,\n    mp3_path: str = None,\n    mp3_bitrate: str = \"64k\"\n) -> list:\n    \"\"\"\n    Constructs an optimized FFmpeg command for simultaneous streaming.\n    \n    Args:\n        device_name: The dshow audio device name (e.g., 'audio=Stereo Mix').\n        output_sample_rate: Sample rate for the raw float32 stream.\n        mp3_path: Optional path to save a persistent MP3 file.\n        mp3_bitrate: Bitrate for the MP3 encoding.\n        \n    Returns:\n        A list of command arguments for subprocess.Popen.\n    \"\"\"\n    device_arg = f\"audio={device_name}\" if \"audio=\" not in device_name else device_name\n    \n    # Base command for raw float32 output to stdout\n    command = [\n        \"ffmpeg\", \"-y\", \"-f\", \"dshow\", \"-i\", device_arg,\n        \"-ac\", \"1\", \"-ar\", str(output_sample_rate),\n        \"-f\", \"f32le\", \"-\"\n    ]\n    \n    # Optional MP3 branch\n    if mp3_path:\n        # Ensure parent directory exists (utility should probably expect this, but we can be safe)\n        Path(mp3_path).parent.mkdir(parents=True, exist_ok=True)\n        command.extend([\n            \"-f\", \"mp3\", \"-ac\", \"1\", \"-ab\", mp3_bitrate, mp3_path\n        ])\n        \n    return command\n",
+    "description": "A specialized utility for generating FFmpeg commands that support dual-stream output. It enables capturing system audio via directshow (dshow) and branching the signal into both a raw floating-point stream (for real-time AI processing) and a compressed MP3 file (for persistent storage). Optimized for low-latency and efficient resource usage.",
+    "language": "python",
+    "tags": [
+        "#ffmpeg",
+        "#audio-capturing engine",
+        "#dual-output",
+        "#directshow",
+        "#automation logic"
+    ],
+    "reliability_score": 0.94,
+    "code_hash": "a83412ca7e68e8a50e9c42cf4afd829b5379c0be4c9c7aa459505c765c860d05",
+    "dependencies": [
+        "subprocess",
+        "pathlib"
+    ],
+    "test_code": "from pathlib import Path\n\ndef test_build_command_basic():\n    cmd = build_ffmpeg_recording_command(\"Stereo Mix\")\n    assert \"ffmpeg\" in cmd\n    assert \"f32le\" in cmd\n    assert \"Stereo Mix\" in \" \".join(cmd)\n\ndef test_build_command_with_mp3(tmp_path):\n    mp3 = tmp_path / \"test.mp3\"\n    cmd = build_ffmpeg_recording_command(\"Microphone\", mp3_path=str(mp3))\n    assert str(mp3) in cmd\n    assert \"-ab\" in cmd\n    assert \"64k\" in cmd\n"
+}

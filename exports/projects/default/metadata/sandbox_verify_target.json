@@ -1,0 +1,21 @@
+{
+    "id": "f1f5a41e-846d-4dff-94e6-aacac4d6ffc4",
+    "project": "default",
+    "name": "sandbox_verify_target",
+    "code": "def sandbox_test_func(x):\n    return x * 2",
+    "description": "[AI-DRAFT] Experimental function to verify sandbox promotion logic.",
+    "tags": [
+        "test",
+        "sandbox"
+    ],
+    "reliability_score": 0.5,
+    "test_metrics": {},
+    "language": "python",
+    "call_count": 0,
+    "code_hash": "03f4f14cb07fdbe3c6ea9d1ce994f20de774b48473d76f8ec6f8fd45388ca204",
+    "version": 1,
+    "dependencies": [],
+    "test_code": "assert sandbox_test_func(10) == 20\nprint('Test passed!')",
+    "created_at": "2026-04-09 23:41:53",
+    "updated_at": "2026-04-09 23:41:53"
+}

@@ -1,0 +1,21 @@
+{
+    "name": "gemini_service_unified_v1",
+    "code": "import json\nimport logging\nimport re\nfrom google import genai\nfrom core.utils.error_handler import safe_execute_async\n\nclass GeminiService:\n    \"\"\"\n    Google Gen AI SDK (google-genai) wrapper for multi-model fallback and structured output.\n    \"\"\"\n    def __init__(self, api_key: str):\n        self.api_key = api_key\n        self.client = genai.Client(api_key=self.api_key)\n\n    async def _call_api_async(self, model_names, prompt, is_json_output=False, response_schema=None):\n        if isinstance(model_names, str): model_names = [model_names]\n        last_exception = None\n        for model_name in model_names:\n            try:\n                config = {}\n                is_gemini_model = model_name.startswith(\"gemini\")\n                if response_schema and is_gemini_model:\n                    config[\"response_mime_type\"] = \"application/json\"\n                    config[\"response_schema\"] = response_schema\n                elif is_json_output and is_gemini_model:\n                    config[\"response_mime_type\"] = \"application/json\"\n                response = await self.client.aio.models.generate_content(model=model_name, contents=prompt, config=config)\n                if response.text:\n                    if response_schema or is_json_output:\n                        return self._parse_json_response(response.text.strip(), \"Gemini API\")\n                    return response.text.strip()\n                raise Exception(f\"Empty response from {model_name}\")\n            except Exception as e:\n                last_exception = e\n                logging.warning(f\"Gemini Request Failed for {model_name}: {e}\")\n                continue\n        raise (last_exception or Exception(\"Gemini Request Failed All Models\"))\n\n    def _parse_json_response(self, text, prefix):\n        try: return json.loads(text)\n        except json.JSONDecodeError:\n            cleaned = text.strip()\n            match = re.search(r\"```json\\s*([\\s\\S]+?)\\s*```\", cleaned) or re.search(r\"```\\s*([\\s\\S]+?)\\s*```\", cleaned)\n            if match: cleaned = match.group(1)\n            try: return json.loads(cleaned)\n            except: return {}\n",
+    "description": "A robust wrapper for the Google GenAI (google-genai) SDK featuring multi-model fallback, JSON/Schema mode support, and resilient JSON parsing from LLM responses. Correctly handles the 1.61.0 SDK interface.",
+    "language": "python",
+    "tags": [
+        "ai",
+        "google-genai",
+        "wrapper",
+        "json-parsing",
+        "retry-logic"
+    ],
+    "reliability_score": 0.88,
+    "code_hash": "3e7dad364187bd4d15075c390153a67002642a7c4ab1622485d76a8d66684a1d",
+    "dependencies": [
+        "core",
+        "google",
+        "re"
+    ],
+    "test_code": ""
+}

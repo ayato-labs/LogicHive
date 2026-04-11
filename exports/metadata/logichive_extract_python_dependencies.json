@@ -1,0 +1,17 @@
+{
+    "id": "8a63b10f-0f77-4a13-8ede-c4ce4dfd0ea5",
+    "name": "logichive_extract_python_dependencies",
+    "code": "def extract_python_dependencies(code: str) -> List[str]:\n    \"\"\"\n    Deterministically extracts top-level imports from Python code using AST.\n    Filters out obvious project-internal relative imports.\n    \"\"\"\n    dependencies = set()\n    try:\n        tree = ast.parse(code)\n        for node in ast.walk(tree):\n            if isinstance(node, ast.Import):\n                for alias in node.names:\n                    # Get base package name (e.g., 'os' from 'os.path')\n                    base = alias.name.split(\".\")[0]\n                    dependencies.add(base)\n            elif isinstance(node, ast.ImportFrom):\n                if node.level == 0 and node.module:\n                    base = node.module.split(\".\")[0]\n                    dependencies.add(base)\n    except SyntaxError as e:\n        logger.error(f\"Orchestrator: Syntax error during dependency extraction: {e}\")\n        # For personal use, we assume code is generally correct, but syntax error is a hard failure.\n        raise ValidationError(f\"Python Syntax Error in provided code: {e}\")\n    except Exception as e:\n        logger.error(f\"Orchestrator: AST dependency extraction failed unexpectedly: {e}\")\n        # In personal mode, we might want to proceed but log the failure clearly.\n        # However, per improvement plan, we should handle this more strictly.\n        raise LogicHiveError(f\"Critical failure during dependency extraction: {e}\")\n    \n    # Filter out common standard libraries to keep the 'recipe' focused on external deps\n    std_lib = {\"os\", \"sys\", \"json\", \"math\", \"datetime\", \"typing\", \"asyncio\", \"logging\", \"ast\", \"pathlib\", \"uuid\", \"abc\"}\n    return sorted(list(dependencies - std_lib))",
+    "description": "LogicHiveプロジェクト内部から抽出されたモジュール化ロジック: extract_python_dependencies (src/orchestrator.py)",
+    "tags": "[\"internal\", \"logichive\", \"src\", \"extract_python_dependencies\"]",
+    "reliability_score": 0.925,
+    "test_metrics": "{}",
+    "call_count": 0,
+    "organization_id": null,
+    "created_at": "2026-03-13 14:27:24",
+    "language": "python",
+    "code_hash": "0210e839b2d01fd6bc0d66947852964887d3c5370fc6a1e8a26727b48a88761f",
+    "version": 1,
+    "dependencies": "[]",
+    "test_code": ""
+}
