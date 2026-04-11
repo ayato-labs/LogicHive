@@ -1,5 +1,4 @@
 import pytest
-import shutil
 import os
 from pathlib import Path
 from orchestrator import do_save_async, do_search_async, do_list_async

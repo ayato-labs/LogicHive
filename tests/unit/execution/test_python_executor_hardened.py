@@ -1,7 +1,6 @@
 import pytest
 import asyncio
 import psutil
-import os
 import sys
 import subprocess
 from core.execution.python import EphemeralPythonExecutor

@@ -4,7 +4,6 @@ import importlib
 import importlib.util
 import pkgutil
 import os
-import sys
 from typing import List, Dict, Any, Optional
 from .base import BaseEvaluator, EvaluationResult
 

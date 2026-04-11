@@ -1,6 +1,5 @@
 import pytest
 import os
-import shutil
 from pathlib import Path
 from storage.sqlite_api import sqlite_storage
 from storage.auto_backup import backup_manager

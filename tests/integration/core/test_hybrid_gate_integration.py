@@ -2,7 +2,6 @@ import pytest
 from unittest.mock import MagicMock, AsyncMock
 from core.evaluation.manager import EvaluationManager
 from core.evaluation.plugins.ai import AIGateEvaluator
-from core.evaluation.base import EvaluationResult
 
 @pytest.mark.asyncio
 async def test_hybrid_gate_integration_high_rigor():

@@ -1,7 +1,5 @@
 import pytest
-import asyncio
 from storage.sqlite_api import SqliteStorage
-from core.exceptions import StorageError
 
 @pytest.fixture
 async def storage(test_db):

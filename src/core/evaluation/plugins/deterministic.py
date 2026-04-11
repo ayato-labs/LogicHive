@@ -1,5 +1,5 @@
 import ast
-from typing import Dict, Any, List
+from typing import List
 from ..base import BaseEvaluator, EvaluationResult
 
 
