@@ -1,25 +1,26 @@
+from contextlib import asynccontextmanager
 from fastmcp import FastMCP
 
 import orchestrator
 from core.exceptions import LogicHiveError, ValidationError
 from orchestrator import do_delete_async, do_save_async
 
-# Initialize FastMCP server
-mcp = FastMCP("LogicHive")
 
-@mcp.on_startup()
-async def on_startup():
-    """Initializes the background worker for environment pooling."""
+@asynccontextmanager
+async def lifespan(server: FastMCP):
+    """Initializes and cleans up the background worker for environment pooling."""
     from core.execution.pool import PoolManager
+
     manager = PoolManager.get_instance()
     await manager.initialize()
+    try:
+        yield
+    finally:
+        await manager.shutdown()
 
-@mcp.on_shutdown()
-async def on_shutdown():
-    """Cleans up pool resources on shutdown."""
-    from core.execution.pool import PoolManager
-    manager = PoolManager.get_instance()
-    await manager.shutdown()
+
+# Initialize FastMCP server with lifespan management
+mcp = FastMCP("LogicHive", lifespan=lifespan)
 
 
 @mcp.tool()
