@@ -60,6 +60,33 @@ We didn't just build a Quality Gate; we fought for it. LogicHive's 3-tier valida
 
 ---
 
+## 🐘 Handling Heavy AI Assets (Torch, Sklearn)
+
+Registering code that imports large libraries like `torch` or `sklearn` can hit the **20s Quality Gate Timeout**. To bypass this and maintain a fast development rhythm, use the following patterns:
+
+### 1. Lazy Import (Recommended)
+Move heavy imports inside your functions. This prevents the library from loading during the initial module-level scan by LogicHive's AST analyzer.
+
+```python
+def perform_clustering(data):
+    from sklearn.cluster import KMeans  # Lazy Import
+    model = KMeans(n_clusters=3)
+    return model.fit_predict(data)
+```
+
+### 2. Smart Mocking
+If you must have top-level imports, use the `mock_imports` parameter in `save_function`. LogicHive will inject `MagicMock` for those modules during verification, allowing the logic structure to be validated without loading the actual library weight.
+
+```python
+# LogicHive will mock 'torch' if provided in mock_imports list
+import torch
+
+def get_device():
+    return "cuda" if torch.cuda.is_available() else "cpu"
+```
+
+---
+
 ## 🚀 Quick Setup
 
 ```powershell

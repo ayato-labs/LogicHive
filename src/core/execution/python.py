@@ -7,6 +7,7 @@ import time
 import traceback
 from pathlib import Path
 
+from core.config import ENABLE_ENV_POOLING
 from .base import (
     BaseExecutor,
     ExecutionError,
@@ -54,8 +55,24 @@ class EphemeralPythonExecutor(BaseExecutor):
     ) -> ExecutionResult:
         start_time = time.time()
         dependencies = dependencies or []
+        mock_imports = kwargs.get("mock_imports", [])
 
-        # 1. Prepare Workspace
+        # 1. Check for Pre-warmed Pool match
+        from .pool import PoolManager
+        pool_manager = PoolManager.get_instance()
+        pooled_env = None
+        
+        # Simple matching logic: if 'torch' is in dependencies, use torch pools
+        if ENABLE_ENV_POOLING and dependencies:
+            target_spec = None
+            if any("torch" in d.lower() for d in dependencies):
+                # Prefer GPU if available and functional
+                target_spec = "torch-gpu" if pool_manager.has_gpu else "torch-cpu"
+            
+            if target_spec:
+                pooled_env = await pool_manager.acquire(target_spec, timeout=1.0)
+
+        # 2. Prepare Workspace
         with tempfile.TemporaryDirectory(prefix="logichive_exec_") as tmpdir:
             tmp_path = Path(tmpdir)
             script_file = tmp_path / "solution.py"
@@ -66,14 +83,19 @@ class EphemeralPythonExecutor(BaseExecutor):
             script_file.write_text(code, encoding="utf-8")
 
             # Create Harness
-            harness_content = self._generate_harness(code, test_code, result_file)
+            harness_content = self._generate_harness(code, test_code, result_file, mock_imports)
             harness_file.write_text(harness_content, encoding="utf-8")
 
-            # 2. Build uv run command
-            cmd = ["uv", "run", "--quiet", "--offline", "--no-project"]
-            for dep in dependencies:
-                cmd.extend(["--with", dep])
-            cmd.extend(["python", str(harness_file)])
+            # 3. Build Command
+            if pooled_env:
+                # Use pre-warmed python directly (FAST)
+                cmd = [str(pooled_env.python_executable), str(harness_file)]
+            else:
+                # Fallback to standard uv run (COLD)
+                cmd = ["uv", "run", "--quiet", "--offline", "--no-project"]
+                for dep in dependencies:
+                    cmd.extend(["--with", dep])
+                cmd.extend(["python", str(harness_file)])
 
             # 3. Execute with isolated environment
             process_env = {
@@ -193,19 +215,25 @@ class EphemeralPythonExecutor(BaseExecutor):
                     error=ExecutionError(name=type(e).__name__, value=str(e), traceback=traceback.format_exc()),
                     duration=time.time() - start_time
                 )
+            finally:
+                if pooled_env:
+                    # Mark used environment for disposal and background replacement
+                    await pool_manager.release(pooled_env)
 
-    def _generate_harness(self, code: str, test_code: str, result_file: Path) -> str:
+    def _generate_harness(self, code: str, test_code: str, result_file: Path, mock_imports: list[str] | None = None) -> str:
         """
         Generates a robust harness that executes the code and exports results as JSON.
         Modeled after Jupyter/E2B behavior.
         """
         # We escape the result path for the string template
         res_path = str(result_file).replace("\\", "\\\\")
+        mock_imports = mock_imports or []
 
         harness = f"""
 import json
 import traceback
 import sys
+from unittest.mock import MagicMock
 
 # Result structure
 results = {{
@@ -225,22 +253,37 @@ def apply_sandbox():
         if mod in sys.modules:
             del sys.modules[mod]
 
+def apply_mocks(mock_list):
+    class LogicHiveSmartMock:
+        def __getattr__(self, name):
+            return LogicHiveSmartMock()
+        def __call__(self, *args, **kwargs):
+            return LogicHiveSmartMock()
+        def __getitem__(self, key):
+            return LogicHiveSmartMock()
+        def __iter__(self):
+            return iter([])
+        def __repr__(self):
+            return "<LogicHiveSmartMock>"
+
+    for mod_name in mock_list:
+        sys.modules[mod_name] = LogicHiveSmartMock()
+
 def run_user_code():
     global results
     try:
-        # 0. Apply runtime sandbox
+        # 0. Apply runtime sandbox & mocks
         apply_sandbox()
+        apply_mocks({json.dumps(mock_imports)})
         
         # 1. Execute the main code (defines functions/classes)
-        # We use a custom dict to capture defined symbols if needed, 
-        # but here we just exec in global scope.
         exec({json.dumps(code)}, globals())
         
         # 2. Execute test code if provided
         if {json.dumps(test_code)}:
             # Tests are expected to raise AssertionError on failure
             exec({json.dumps(test_code)}, globals())
-            results["main_result"] = "Tests Passed"
+            results["main_result"] = "Tests Passed (with Mocks: {', '.join(mock_imports)})" if {str(bool(mock_imports))} else "Tests Passed"
         else:
             # If no tests, we just check if it imports/defines correctly
             results["main_result"] = "Execution Successful"

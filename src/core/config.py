@@ -72,6 +72,19 @@ FAISS_MAPPING_PATH = os.getenv(
     "FAISS_MAPPING_PATH", str(DATA_DIR / "faiss_mapping.json")
 )
 
+# 5. Virtual Environment Pooling (Pre-warming)
+ENABLE_ENV_POOLING = os.getenv("ENABLE_ENV_POOLING", "true").lower() == "true"
+POOL_BASE_DIR = DATA_DIR / "pools"
+POOL_MAX_SIZE = int(os.getenv("POOL_MAX_SIZE", "1")) # per spec
+
+# Default specs for pre-warming
+# Format: {spec_name: [list of critical packages]}
+DEFAULT_POOL_SPECS = {
+    "tiny-pool": ["radon"], # Very small lib for fast verification
+    "torch-cpu": ["torch", "numpy"],
+    "torch-gpu": ["torch", "numpy"], # GPU version is auto-detected and handled by uv
+}
+
 # Legacy / Platform Compat
 TRANSPORT = os.getenv("TRANSPORT", "http")
 HUB_URL = os.getenv(

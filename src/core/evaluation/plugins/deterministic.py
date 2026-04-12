@@ -25,6 +25,9 @@ class DeterministicEvaluator(BaseEvaluator):
         # Audit Code Substance
         hollow_methods = self._find_hollow_methods(code)
 
+        # Audit Performance/Importers
+        heavy_imports = self._find_heavy_imports(code)
+
         reasons = []
         score = 100.0
 
@@ -44,6 +47,14 @@ class DeterministicEvaluator(BaseEvaluator):
             score -= penalty
             reasons.append(f"Hollow logic detected in methods: {', '.join(hollow_methods)}")
 
+        # 3. Heavy Import Detection (Lazy Import Suggestions)
+        if heavy_imports:
+            # We don't necessarily penalize score heavily if they are present, 
+            # but we warn about registration timeout.
+            score -= min(len(heavy_imports) * 5, 20)
+            reasons.append(f"Performance Warning: Module-level heavy imports detected ({', '.join(heavy_imports)}). "
+                           "Consider 'Lazy Import' (import inside functions) to avoid registration timeouts.")
+
         # Cap score
         score = max(0.0, score)
 
@@ -52,7 +63,8 @@ class DeterministicEvaluator(BaseEvaluator):
             reason=" | ".join(reasons),
             details={
                 "assertion_count": assertion_count,
-                "hollow_methods": hollow_methods
+                "hollow_methods": hollow_methods,
+                "heavy_imports": heavy_imports
             }
         )
 
@@ -101,5 +113,32 @@ class DeterministicEvaluator(BaseEvaluator):
                             if stmt.value.id in arg_names:
                                 hollow.append(node.name)
             return hollow
+        except SyntaxError:
+            return []
+
+    def _find_heavy_imports(self, code: str) -> list[str]:
+        """
+        Detects top-level imports of notoriously heavy libraries.
+        Suggests Lazy Import patterns.
+        """
+        HEAVY_LIBS = {"torch", "tensorflow", "sklearn", "pandas", "matplotlib", "seaborn", "scipy"}
+        heavy_found = []
+
+        try:
+            tree = ast.parse(code)
+            # We only look for imports at the Module level (top-level)
+            # To do this correctly, we iterate over the root node's body.
+            for node in tree.body:
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        base_mod = alias.name.split('.')[0]
+                        if base_mod in HEAVY_LIBS:
+                            heavy_found.append(base_mod)
+                elif isinstance(node, ast.ImportFrom):
+                    if node.module:
+                        base_mod = node.module.split('.')[0]
+                        if base_mod in HEAVY_LIBS:
+                            heavy_found.append(base_mod)
+            return list(set(heavy_found))
         except SyntaxError:
             return []

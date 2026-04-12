@@ -135,10 +135,15 @@ async def do_save_async(
     dependencies: list[str] = [],
     test_code: str = "",
     project: str = "default",
+    mock_imports: list[str] = [],
 ):
     """
     Includes LLM Quality Gate 2.0 (LLM + Static Analysis), RAG optimization, and versioning.
     """
+    # Mark as mock-validated if mock_imports are used
+    if mock_imports and "[MOCK_VALIDATED]" not in description:
+        description = f"{description}\n\n[MOCK_VALIDATED: {', '.join(mock_imports)}]"
+
     # --- 1. Evaluate Logic Asset (New Plugin System) ---
     eval_manager = EvaluationManager()
     eval_res = await eval_manager.evaluate_all(
@@ -148,6 +153,7 @@ async def do_save_async(
         tags=tags,
         test_code=test_code,
         dependencies=dependencies,
+        mock_imports=mock_imports,
     )
 
     final_score = eval_res["score"]

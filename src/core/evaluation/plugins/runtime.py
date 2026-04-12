@@ -30,6 +30,7 @@ class RuntimeEvaluator(BaseEvaluator):
         """
         test_code = kwargs.get("test_code", "")
         dependencies = kwargs.get("dependencies", [])
+        mock_imports = kwargs.get("mock_imports", [])
         timeout = kwargs.get("timeout", 20)
 
         if not test_code:
@@ -54,7 +55,8 @@ class RuntimeEvaluator(BaseEvaluator):
                 code=code,
                 test_code=test_code,
                 dependencies=dependencies,
-                timeout=timeout
+                timeout=timeout,
+                mock_imports=mock_imports
             )
 
             # 4. Map ExecutionResult to EvaluationResult

@@ -7,6 +7,20 @@ from orchestrator import do_delete_async, do_save_async
 # Initialize FastMCP server
 mcp = FastMCP("LogicHive")
 
+@mcp.on_startup()
+async def on_startup():
+    """Initializes the background worker for environment pooling."""
+    from core.execution.pool import PoolManager
+    manager = PoolManager.get_instance()
+    await manager.initialize()
+
+@mcp.on_shutdown()
+async def on_shutdown():
+    """Cleans up pool resources on shutdown."""
+    from core.execution.pool import PoolManager
+    manager = PoolManager.get_instance()
+    await manager.shutdown()
+
 
 @mcp.tool()
 async def search_functions(
@@ -92,6 +106,7 @@ async def save_function(
     dependencies: list[str] = [],
     test_code: str = "",
     project: str = "default",
+    mock_imports: list[str] = [],
 ) -> str:
     """
     Saves a verified, high-quality code asset to the LogicHive vault for future reuse.
@@ -102,6 +117,8 @@ async def save_function(
     2. Metadata is Critical: Provide a detailed 'description' (min 10 chars).
     3. Taxonomize: Use relevant 'tags' to ensure future discoverability.
     4. Self-Test: Always include 'test_code' if possible to increase reliability score.
+    5. Smart Mocking: If the code uses heavy libraries (torch, sklearn) that cause timeouts during 
+       verification, add them to 'mock_imports' to bypass initialization while testing the logic shell.
 
     REJECTION CRITERIA:
     - Syntax errors (instant Score 0 / Critical failure).
@@ -117,6 +134,7 @@ async def save_function(
         dependencies: External libraries required (e.g., ['pandas', 'pydantic']).
         test_code: Pytest/Unit test code for automated validation.
         project: Project name for logically grouping code (defaults to 'default').
+        mock_imports: List of modules to mock during registration to avoid timeouts (e.g. ['torch']).
     """
     try:
         success = await do_save_async(
@@ -128,6 +146,7 @@ async def save_function(
             dependencies=dependencies,
             test_code=test_code,
             project=project,
+            mock_imports=mock_imports,
         )
         return (
             "Saved successfully to LogicHive" if success else "Failed (Unknown Error)"
