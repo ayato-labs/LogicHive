@@ -112,13 +112,14 @@ class SqliteStorage:
                 new_version,
                 json.dumps(function_data.get("dependencies", [])),
                 function_data.get("test_code", ""),
+                json.dumps(function_data.get("env_fingerprint", {})) if function_data.get("env_fingerprint") else None,
             )
 
             await db.execute(
                 """
                 INSERT OR REPLACE INTO logichive_functions 
-                (id, project, name, code, description, language, tags, reliability_score, test_metrics, embedding, code_hash, version, dependencies, test_code)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (id, project, name, code, description, language, tags, reliability_score, test_metrics, embedding, code_hash, version, dependencies, test_code, env_fingerprint)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 data,
             )
@@ -340,6 +341,10 @@ class SqliteStorage:
         if "dependencies" in processed:
             processed["dependencies"] = _safe_json_loads(
                 processed["dependencies"], "dependencies"
+            )
+        if "env_fingerprint" in processed:
+            processed["env_fingerprint"] = _safe_json_loads(
+                processed["env_fingerprint"], "env_fingerprint"
             )
 
         if "project" not in processed or processed.get("project") is None:

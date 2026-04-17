@@ -32,6 +32,7 @@ async def init_db():
         version INTEGER DEFAULT 1,
         dependencies TEXT,
         test_code TEXT,
+        env_fingerprint TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(project, name)
@@ -53,6 +54,7 @@ async def init_db():
         code_hash TEXT,
         dependencies TEXT,
         test_code TEXT,
+        env_fingerprint TEXT,
         archived_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """)

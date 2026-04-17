@@ -80,10 +80,13 @@ POOL_MAX_SIZE = int(os.getenv("POOL_MAX_SIZE", "1")) # per spec
 # Default specs for pre-warming
 # Format: {spec_name: [list of critical packages]}
 DEFAULT_POOL_SPECS = {
-    "tiny-pool": ["radon"], # Very small lib for fast verification
     "torch-cpu": ["torch", "numpy"],
     "torch-gpu": ["torch", "numpy"], # GPU version is auto-detected and handled by uv
 }
+
+# 6. Execution Driver (Security Hardening)
+# "local" (uv/venv), "docker" (isolated container)
+EXECUTION_DRIVER = os.getenv("EXECUTION_DRIVER", "local").lower()
 
 # Legacy / Platform Compat
 TRANSPORT = os.getenv("TRANSPORT", "http")

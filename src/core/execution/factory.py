@@ -46,4 +46,15 @@ class ExecutorFactory:
     @classmethod
     def get_executor(cls, language: str) -> BaseExecutor | None:
         cls._load_plugins()
-        return cls._executors.get(language.lower())
+        lang = language.lower()
+        
+        from core.config import EXECUTION_DRIVER
+        
+        # If docker is requested and we have a docker variant, return it
+        if EXECUTION_DRIVER == "docker":
+            # For now, we only have docker for python
+            if lang == "python":
+                from .docker import DockerPythonExecutor
+                return DockerPythonExecutor()
+        
+        return cls._executors.get(lang)

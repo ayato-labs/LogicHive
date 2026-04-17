@@ -60,13 +60,20 @@ async def search_functions(
         name = res["name"]
         if is_draft:
             name = f"⚠️ [AI-DRAFT] {name}"
-
         sim = res.get("similarity", 0)
         rel = res.get("reliability_score", 0) * 100
         desc = res.get("description", "No description")
         tags = ", ".join(res.get("tags", []))
 
-        md += f"- **{name}** (Match: {sim:.2f}, Reliability: {rel:.1f}%)\n"
+        # Check for Environment Drift
+        drift_warning = ""
+        stored_env = res.get("env_fingerprint")
+        if stored_env:
+            from core.system_info import SystemFingerprint
+            if SystemFingerprint.compare(stored_env, SystemFingerprint.get_current()):
+                drift_warning = " ⚠️ [DRIFT]"
+
+        md += f"- **{name}{drift_warning}** (Match: {sim:.2f}, Reliability: {rel:.1f}%)\n"
         if is_draft:
             md += "  - *NOTE: This is a generated draft. Refine and Save to verify.*\n"
         md += f"  - *{desc}*\n"
@@ -94,7 +101,16 @@ async def get_function(name: str, project: str = "default") -> str:
     tags = ", ".join(f_data.get("tags", []))
     deps = ", ".join(f_data.get("dependencies", []))
 
-    return f"**Function: {name}**\n\n{desc}\n\n**Tags:** {tags}\n**Dependencies:** {deps}\n\n```{lang}\n{code}\n```"
+    # Environment Drift Check
+    drift_header = ""
+    stored_env = f_data.get("env_fingerprint")
+    if stored_env:
+        from core.system_info import SystemFingerprint
+        warning = SystemFingerprint.generate_warning_msg(stored_env)
+        if warning:
+            drift_header = f"> [!WARNING]\n> {warning.replace(chr(10), chr(10) + '> ')}\n\n"
+
+    return f"**Function: {name}**\n\n{drift_header}{desc}\n\n**Tags:** {tags}\n**Dependencies:** {deps}\n\n```{lang}\n{code}\n```"
 
 
 @mcp.tool()
@@ -125,12 +141,18 @@ async def save_function(
     - Syntax errors (instant Score 0 / Critical failure).
     - Vague descriptions or missing tags.
     - Poor AI-graded quality (logic flaws, security risks).
+    - **Quality Theater**: Literal assertions (e.g., `assert True`) or tests that don't call the code.
+
+    SUPPORTED LANGUAGES:
+    - **Python** (High Fidelity): Full AST-based verification, assertion analysis, and runtime pool execution.
+    - **JavaScript / TypeScript** (Standard): Structural assertion detection and pattern matching.
+    - **C++ / Java** (Foundational): Keyword-based asset integrity checks.
 
     Args:
         name: Unique identifier for the function (e.g., "validate_email_utils").
         code: The source code implementation.
         description: Technical specification. Explain edge cases and logic.
-        language: Programming language (lowercase, e.g., 'python', 'typescript').
+        language: Programming language (lowercase, e.g., 'python', 'javascript').
         tags: Categorization labels for discovery.
         dependencies: External libraries required (e.g., ['pandas', 'pydantic']).
         test_code: Pytest/Unit test code for automated validation.

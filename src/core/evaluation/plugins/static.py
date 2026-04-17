@@ -6,6 +6,7 @@ import os
 import subprocess
 import tempfile
 
+from pathlib import Path
 from ..base import BaseEvaluator, EvaluationResult
 
 logger = logging.getLogger(__name__)
@@ -100,9 +101,30 @@ class RuffEvaluator(BaseEvaluator):
             return EvaluationResult(score=100.0, reason="Skipped (Not Python).")
 
         try:
+            import shutil
+            from core.config import PROJECT_ROOT
+            
+            # 1. Search for ruff in PATH
+            ruff_cmd = shutil.which("ruff")
+            
+            # 2. Fallback to local .venv (common in this repository's setup)
+            if not ruff_cmd:
+                venv_ruff = Path(PROJECT_ROOT) / ".venv" / "Scripts" / "ruff.exe"
+                if venv_ruff.exists():
+                    ruff_cmd = str(venv_ruff)
+                else:
+                    # Final fallback to see if it's in the same directory as python
+                    import sys
+                    python_dir = Path(sys.executable).parent
+                    alt_ruff = python_dir / ("ruff.exe" if os.name == "nt" else "ruff")
+                    if alt_ruff.exists():
+                        ruff_cmd = str(alt_ruff)
+                    else:
+                        ruff_cmd = "ruff" # Last resort
+            
             # Use subprocess to run ruff check on stdin
             process = await asyncio.create_subprocess_exec(
-                "ruff",
+                ruff_cmd,
                 "check",
                 "--output-format",
                 "json",
@@ -123,21 +145,29 @@ class RuffEvaluator(BaseEvaluator):
 
             issues = json.loads(stdout.decode())
             if not issues:
-                return EvaluationResult(score=100.0, reason="Ruff: No issues found.")
+                return EvaluationResult(score=100.0, reason="Ruff: No issues found. (Ideal state)")
 
             # Scoring logic: Deduct points for each issue
             score = 100.0
-            warning_count = 0
-            for issue in issues:
-                # Ruff JSON format has 'code' (like E402)
-                # We'll treat all as issues for now
-                score -= 2.0
-                warning_count += 1
+            issue_summaries = []
+            
+            # Group by code to avoid repetitiveness
+            for issue in issues[:5]: # Cap feedback to avoid token bloat
+                code = issue.get("code", "UNK")
+                msg = issue.get("message", "No message")
+                line = issue.get("location", {}).get("row", "?")
+                issue_summaries.append(f"[{code}] L{line}: {msg}")
 
+            score -= len(issues) * 2.0
             score = max(0.0, score)
+            
+            summary_text = " | ".join(issue_summaries)
+            if len(issues) > 5:
+                summary_text += f" ...and {len(issues) - 5} more issues."
+                
             return EvaluationResult(
                 score=score,
-                reason=f"Ruff: Found {warning_count} issues. (Score: {score})",
+                reason=f"Ruff: Found {len(issues)} issues. {summary_text}",
             )
 
         except Exception as e:

@@ -207,6 +207,7 @@ async def do_save_async(
             dependencies = extracted
 
     # 7. Final data preparation and save
+    from core.system_info import SystemFingerprint
     data = {
         "name": str(name),
         "code": str(code),
@@ -219,6 +220,7 @@ async def do_save_async(
         "dependencies": dependencies,
         "test_code": test_code,
         "project": project,
+        "env_fingerprint": SystemFingerprint.get_current(),
     }
 
     save_result = await sqlite_storage.upsert_function(data)
