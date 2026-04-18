@@ -62,11 +62,18 @@ class PoolManager:
             logger.info("PoolManager: Pooling is disabled in config.")
             return
 
-        os.makedirs(self.base_dir, exist_ok=True)
-        # Cleanup old pools on startup
-        for item in self.base_dir.iterdir():
-            if item.is_dir():
-                shutil.rmtree(item, ignore_errors=True)
+        def _sync_cleanup():
+            try:
+                os.makedirs(self.base_dir, exist_ok=True)
+                # Cleanup old pools on startup
+                for item in self.base_dir.iterdir():
+                    if item.is_dir():
+                        shutil.rmtree(item, ignore_errors=True)
+            except Exception as e:
+                logger.error(f"PoolManager: Initial cleanup failed: {e}")
+
+        # Run cleanup in a thread to keep MCP server responsive
+        await asyncio.to_thread(_sync_cleanup)
         
         logger.info(f"PoolManager: Initialized at {self.base_dir} (GPU Detected: {self.has_gpu})")
         self._worker_task = asyncio.create_task(self._background_worker())

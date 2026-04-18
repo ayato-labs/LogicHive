@@ -48,37 +48,41 @@ async def search_functions(
         language: Optional language to filter by (e.g., 'python', 'javascript').
         project: Optional project name to narrow the search.
     """
-    results = await orchestrator.do_search_async(
-        query, limit, language, project=project
-    )
-    if not results:
-        return "No matching functions found."
+    try:
+        results = await orchestrator.do_search_async(
+            query, limit, language, project=project
+        )
+        if not results:
+            return "No matching functions found."
 
-    md = "### Search Results\n\n"
-    for res in results:
-        is_draft = res.get("is_draft", False)
-        name = res["name"]
-        if is_draft:
-            name = f"⚠️ [AI-DRAFT] {name}"
-        sim = res.get("similarity", 0)
-        rel = res.get("reliability_score", 0) * 100
-        desc = res.get("description", "No description")
-        tags = ", ".join(res.get("tags", []))
+        md = "### Search Results\n\n"
+        for res in results:
+            is_draft = res.get("is_draft", False)
+            name = res["name"]
+            if is_draft:
+                name = f"⚠️ [AI-DRAFT] {name}"
+            sim = res.get("similarity", 0)
+            rel = res.get("reliability_score", 0) * 100
+            desc = res.get("description", "No description")
+            tags = ", ".join(res.get("tags", []))
 
-        # Check for Environment Drift
-        drift_warning = ""
-        stored_env = res.get("env_fingerprint")
-        if stored_env:
-            from core.system_info import SystemFingerprint
-            if SystemFingerprint.compare(stored_env, SystemFingerprint.get_current()):
-                drift_warning = " ⚠️ [DRIFT]"
+            # Check for Environment Drift
+            drift_warning = ""
+            stored_env = res.get("env_fingerprint")
+            if stored_env:
+                from core.system_info import SystemFingerprint
+                if SystemFingerprint.compare(stored_env, SystemFingerprint.get_current()):
+                    drift_warning = " ⚠️ [DRIFT]"
 
-        md += f"- **{name}{drift_warning}** (Match: {sim:.2f}, Reliability: {rel:.1f}%)\n"
-        if is_draft:
-            md += "  - *NOTE: This is a generated draft. Refine and Save to verify.*\n"
-        md += f"  - *{desc}*\n"
-        md += f"  - Tags: {tags}\n"
-    return md
+            md += f"- **{name}{drift_warning}** (Match: {sim:.2f}, Reliability: {rel:.1f}%)\n"
+            if is_draft:
+                md += "  - *NOTE: This is a generated draft. Refine and Save to verify.*\n"
+            md += f"  - *{desc}*\n"
+            md += f"  - Tags: {tags}\n"
+        return md
+    except Exception as e:
+        logger.error(f"MCP Server: Error in search_functions: {e}")
+        return f"LogicHive Error: Failed to perform search. Detail: {str(e)}"
 
 
 @mcp.tool()
@@ -91,26 +95,30 @@ async def get_function(name: str, project: str = "default") -> str:
         name: The precise, case-sensitive name of the function (e.g., "save_log").
         project: The project namespace (defaults to 'default').
     """
-    f_data = await orchestrator.do_get_async(name, project=project)
-    if not f_data:
-        return f"Function '{name}' not found"
+    try:
+        f_data = await orchestrator.do_get_async(name, project=project)
+        if not f_data:
+            return f"Function '{name}' not found"
 
-    lang = f_data.get("language", "python")
-    code = f_data["code"]
-    desc = f_data.get("description", "No description")
-    tags = ", ".join(f_data.get("tags", []))
-    deps = ", ".join(f_data.get("dependencies", []))
+        lang = f_data.get("language", "python")
+        code = f_data["code"]
+        desc = f_data.get("description", "No description")
+        tags = ", ".join(f_data.get("tags", []))
+        deps = ", ".join(f_data.get("dependencies", []))
 
-    # Environment Drift Check
-    drift_header = ""
-    stored_env = f_data.get("env_fingerprint")
-    if stored_env:
-        from core.system_info import SystemFingerprint
-        warning = SystemFingerprint.generate_warning_msg(stored_env)
-        if warning:
-            drift_header = f"> [!WARNING]\n> {warning.replace(chr(10), chr(10) + '> ')}\n\n"
+        # Environment Drift Check
+        drift_header = ""
+        stored_env = f_data.get("env_fingerprint")
+        if stored_env:
+            from core.system_info import SystemFingerprint
+            warning = SystemFingerprint.generate_warning_msg(stored_env)
+            if warning:
+                drift_header = f"> [!WARNING]\n> {warning.replace(chr(10), chr(10) + '> ')}\n\n"
 
-    return f"**Function: {name}**\n\n{drift_header}{desc}\n\n**Tags:** {tags}\n**Dependencies:** {deps}\n\n```{lang}\n{code}\n```"
+        return f"**Function: {name}**\n\n{drift_header}{desc}\n\n**Tags:** {tags}\n**Dependencies:** {deps}\n\n```{lang}\n{code}\n```"
+    except Exception as e:
+        logger.error(f"MCP Server: Error in get_function: {e}")
+        return f"LogicHive Error: Failed to retrieve function. Detail: {str(e)}"
 
 
 @mcp.tool()
@@ -240,23 +248,71 @@ async def list_functions(
         tags: Optional list of tags to filter by.
         limit: Max results. Default 50.
     """
-    results = await orchestrator.do_list_async(project=project, tags=tags, limit=limit)
-    if not results:
-        return "No functions found in the vault."
+    try:
+        results = await orchestrator.do_list_async(project=project, tags=tags, limit=limit)
+        if not results:
+            return "No functions found in the vault."
 
-    md = "### Vault Assets\n\n"
-    for res in results:
-        name = res["name"]
-        project_name = res.get("project", "default")
-        desc = res.get("description", "No description")
-        tags_str = ", ".join(res.get("tags", []))
-        rel = res.get("reliability_score", 0) * 100
+        md = "### Vault Assets\n\n"
+        for res in results:
+            name = res["name"]
+            project_name = res.get("project", "default")
+            desc = res.get("description", "No description")
+            tags_str = ", ".join(res.get("tags", []))
+            rel = res.get("reliability_score", 0) * 100
 
-        md += f"- **{name}** (Project: {project_name}, Reliability: {rel:.1f}%)\n"
-        md += f"  - *{desc}*\n"
-        md += f"  - Tags: {tags_str}\n"
+            md += f"- **{name}** (Project: {project_name}, Reliability: {rel:.1f}%)\n"
+            md += f"  - *{desc}*\n"
+            md += f"  - Tags: {tags_str}\n"
 
-    return md
+        return md
+    except Exception as e:
+        logger.error(f"MCP Server: Error in list_functions: {e}")
+        return f"LogicHive Error: Failed to list functions. Detail: {str(e)}"
+
+
+@mcp.tool()
+async def check_integrity() -> str:
+    """
+    Performs a comprehensive integrity check of the LogicHive system,
+    including DB status, Vector store synchronization, and Environment pools.
+    """
+    import os
+    from core.config import SQLITE_DB_PATH, FAISS_INDEX_PATH
+    from storage.sqlite_api import sqlite_storage
+    from storage.vector_store import vector_manager
+
+    status = ["## LogicHive Integrity Report\n"]
+    
+    try:
+        # 1. DB Check
+        db_exists = os.path.exists(SQLITE_DB_PATH)
+        status.append(f"### 1. Database\n- Path: `{SQLITE_DB_PATH}`\n- Status: {'✅ Connected' if db_exists else '❌ Missing'}")
+        
+        if db_exists:
+            count = await sqlite_storage.get_function_count()
+            status.append(f"- Record Count: {count}")
+
+        # 2. Vector Store Check
+        faiss_exists = os.path.exists(FAISS_INDEX_PATH)
+        status.append(f"### 2. Vector Store (FAISS)\n- Path: `{FAISS_INDEX_PATH}`\n- Status: {'✅ Loaded' if faiss_exists else '⚠️ Missing (Will rebuild on search)'}")
+        
+        if faiss_exists and db_exists:
+            # Check for sync (simplified count check)
+            idx_size = vector_manager.index.ntotal if vector_manager.index else 0
+            if idx_size != count:
+                status.append(f"- ⚠️ **Desync Detected**: DB({count}) vs FAISS({idx_size}). Rebuild recommended.")
+            else:
+                status.append(f"- Sync Status: ✅ Optimal ({idx_size} vectors)")
+
+        # 3. Environment Pool Check
+        from core.execution.pool import PoolManager
+        pool = PoolManager.get_instance()
+        status.append(f"### 3. Environment Pool\n- Base Dir: `{pool.base_dir}`\n- GPU Available: {'✅' if pool.has_gpu else '❌'}")
+        
+        return "\n".join(status)
+    except Exception as e:
+        return f"Integrity Check Failed: {str(e)}"
 
 
 if __name__ == "__main__":
