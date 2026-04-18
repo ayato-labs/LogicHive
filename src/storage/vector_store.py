@@ -250,5 +250,19 @@ class VectorIndexManager:
         return results
 
 
+    async def check_health(self) -> dict[str, Any]:
+        """Checks if the FAISS index is loaded and has entries."""
+        if not self._initialized:
+            return {"status": "Warning", "message": "Vector store not yet initialized."}
+        
+        count = self.index.ntotal
+        mapped = len(self.id_to_name)
+        return {
+            "status": "Healthy" if count >= 0 else "Error",
+            "message": f"Index has {count} total entries ({mapped} mapped active).",
+            "details": {"total": count, "active": mapped}
+        }
+
+
 # Singleton instance
 vector_manager = VectorIndexManager()

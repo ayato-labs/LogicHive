@@ -5,7 +5,7 @@ import shutil
 import subprocess
 import uuid
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 from core.config import DEFAULT_POOL_SPECS, ENABLE_ENV_POOLING, POOL_BASE_DIR, POOL_MAX_SIZE
 
@@ -199,3 +199,21 @@ class PoolManager:
             logger.error(f"PoolManager: Failed to prepare {spec_name}: {e}")
             if env_path.exists():
                 shutil.rmtree(env_path, ignore_errors=True)
+    async def check_health(self) -> dict[str, Any]:
+        """Checks if the pooling system is active and pools have environments."""
+        if not ENABLE_ENV_POOLING:
+            return {"status": "Warning", "message": "Pooling is disabled in config."}
+        
+        status_map = {}
+        for spec, queue in self.pools.items():
+            status_map[spec] = queue.qsize()
+            
+        is_healthy = any(q.qsize() > 0 for q in self.pools.values())
+        return {
+            "status": "Healthy" if is_healthy else "Warning",
+            "message": f"Pools active. Current sizes: {status_map}",
+            "details": status_map
+        }
+
+# Singleton instance
+pool_manager = PoolManager.get_instance()

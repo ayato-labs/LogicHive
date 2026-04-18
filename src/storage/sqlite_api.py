@@ -96,7 +96,7 @@ class SqliteStorage:
                     logger.debug(f"SQLite: In-place update for '{name}' (same code_hash)")
 
             data = (
-                existing["id"] if existing else row_id,
+                row_id if not existing else existing["id"],
                 project,
                 name,
                 function_data["code"],
@@ -435,6 +435,21 @@ class SqliteStorage:
                 f"Failed to increment call count for '{name}' in project '{project}': {e}"
             )
 
+
+    async def check_health(self) -> dict[str, Any]:
+        """Checks if the database is accessible and the main table exists."""
+        try:
+            db = await get_db_connection()
+            async with db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='logichive_functions'") as cursor:
+                row = await cursor.fetchone()
+                if row:
+                    await db.close()
+                    return {"status": "Healthy", "message": "Database and main table are OK."}
+                else:
+                    await db.close()
+                    return {"status": "Error", "message": "Table 'logichive_functions' not found."}
+        except Exception as e:
+            return {"status": "Error", "message": f"Database check failed: {e}"}
 
 # Singleton instance
 sqlite_storage = SqliteStorage()

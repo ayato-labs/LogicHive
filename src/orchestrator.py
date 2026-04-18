@@ -2,6 +2,7 @@ import ast
 import asyncio
 import logging
 import re
+import uuid
 from typing import Any
 
 from core.config import (
@@ -209,6 +210,7 @@ async def do_save_async(
     # 7. Final data preparation and save
     from core.system_info import SystemFingerprint
     data = {
+        "id": str(uuid.uuid4()), # Explicit ID if not existing, though upsert handles it
         "name": str(name),
         "code": str(code),
         "description": str(description),
@@ -299,5 +301,35 @@ async def do_list_async(
     """Lists functions with optional filtering."""
     return await sqlite_storage.get_functions(project=project, tags=tags, limit=limit)
 
+
+async def check_integrity() -> dict[str, Any]:
+    """
+    Checks the health of various components (Database, Vector Index, Pool).
+    """
+    from storage.sqlite_api import sqlite_storage
+    from storage.vector_store import vector_manager
+    from core.execution.pool import pool_manager
+    
+    details = {}
+    
+    # 1. DB Check
+    db_health = await sqlite_storage.check_health()
+    details["database"] = db_health
+    
+    # 2. Vector Store Check
+    vector_health = await vector_manager.check_health()
+    details["vector_store"] = vector_health
+    
+    # 3. Pool Check
+    pool_health = await pool_manager.check_health()
+    details["pool_manager"] = pool_health
+    
+    status = "Healthy"
+    if any(h.get("status") == "Error" for h in details.values()):
+        status = "Error"
+    elif any(h.get("status") == "Warning" for h in details.values()):
+        status = "Warning"
+        
+    return {"status": status, "details": details}
 
 # --- End of Orchestrator ---

@@ -54,27 +54,34 @@ class FakeLogicIntelligence:
         Simulates internal LLM calls used by plugins/consolidation.
         Uses keywords in prompt to trigger specific deterministic behaviors.
         """
-        prompt_lower = prompt.lower()
-        if "syntax error" in prompt_lower or "not runnable" in prompt_lower:
-            return {"score": 0, "reason": "Fake: Detected syntax errors"}
-        if "injection" in prompt_lower or "<script>" in prompt_lower:
-            return {"score": 0, "reason": "Fake: Potential injection attempt blocked"}
-
-        if "break" in prompt_lower:
+        p_lower = prompt.lower()
+        
+        # Security/Vulnerability Triggers
+        if "eval" in p_lower or "exec" in p_lower:
+            return {"score": 0, "reason": "Fake: AI Auditor detected code injection risk."}
+        if "secret_key" in p_lower or "api_key" in p_lower:
+            return {"score": 20, "reason": "Fake: AI Auditor detected hardcoded credentials."}
+        
+        # Sophistry/Quality Theater Triggers
+        if "pass" in p_lower and len(p_lower) < 50:
+            return {"score": 10, "reason": "Fake: AI Auditor detected empty or stub implementation."}
+        
+        # Error/Edge case triggers
+        if "break" in p_lower:
             return None
-        if "fail" in prompt_lower:
+        if "fail" in p_lower:
             return {}
 
         # Success response (Default)
         if use_json:
             return {
                 "name": "fake_func",
-                "code": "def fake_func(): pass",
-                "description": "A fake function generated for testing",
-                "tags": ["fake"],
+                "code": "def fake_func():\n    \"\"\"Docstring.\"\"\"\n    return True",
+                "description": "A high-quality fake function generated for testing",
+                "tags": ["fake", "unit-test"],
                 "dependencies": [],
-                "score": 95,
-                "reason": "Fake: High quality code"
+                "score": 98,
+                "reason": "Fake: Verified production-grade logic."
             }
         return "TECHNICAL_QUERY_EXPANSION"
 

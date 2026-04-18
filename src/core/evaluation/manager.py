@@ -168,26 +168,49 @@ class EvaluationManager:
 
         ai_res = results.get("ai_gate")
         det_res = results.get("deterministic")
+        runtime_res = results.get("runtime")
+        
+        # New Rigour-inspired evaluators
+        sec_static = results.get("security_static")
+        dep_vouch = results.get("dependency_vouch")
+        metrics_res = results.get("metrics_gate")
+        
+        # Fallback static evaluators
         python_static_res = results.get("python_static")
         ruff_res = results.get("ruff")
         eslint_res = results.get("eslint")
-        runtime_res = results.get("runtime")
+
+        # --- RIGOUR IMMUNE SYSTEM: CRITICAL FILTERS ---
+        # If static security check finds high-risk flaws (score < 60), reject immediately.
+        if sec_static and sec_static.score < 60:
+            return {
+                "score": 0.0,
+                "reason": f"SECURITY REJECTION: {sec_static.reason}",
+                "details": {k: {"score": v.score, "reason": v.reason} for k, v in results.items()},
+            }
+        
+        # If dependency check finds hallucinations, it's a 'garbage' logic. reject.
+        if dep_vouch and dep_vouch.score < 70:
+            return {
+                "score": 0.0,
+                "reason": f"DEPENDENCY REJECTION: {dep_vouch.reason}",
+                "details": {k: {"score": v.score, "reason": v.reason} for k, v in results.items()},
+            }
 
         # 4. Weighted Calculation
-        # NEW Weights: Deterministic (40%), Runtime (30%), AI (20%), Static (10%)
+        # Weights: Deterministic (30%), Runtime (30%), Static/Security (20%), AI (15%), Metrics (5%)
         parts = []
 
-        # A. Deterministic Layer (40%) - THE TRUTH FOUNDATION
+        # A. Deterministic Layer (30%) - THE TRUTH FOUNDATION
         if det_res:
             det_score = det_res.score
-            # HARD BLOCK: If facts say 0 (no assertions or hollow), no opinion can save it.
             if det_score == 0:
                 return {
                     "score": 0.0,
                     "reason": f"DETERMINISTIC REJECTION: {det_res.reason}",
                     "details": {k: {"score": v.score, "reason": v.reason} for k, v in results.items()},
                 }
-            parts.append((det_score, 0.40, f"Facts: {det_res.reason}"))
+            parts.append((det_score, 0.30, f"Facts: {det_res.reason}"))
 
         # B. Runtime Verification (30%)
         if runtime_res:
@@ -200,19 +223,28 @@ class EvaluationManager:
                 }
             parts.append((runtime_score, 0.30, f"Runtime: {runtime_res.reason}"))
 
-        # C. AI Gate (20%) - THE AUDITOR'S OPINION
-        if ai_res:
-            parts.append((ai_res.score, 0.20, f"AI Opinion: {ai_res.reason}"))
-
-        # D. Static Analysis (10%)
+        # C. Static/Security Analysis (20%)
+        static_scores = []
+        if sec_static: static_scores.append(sec_static.score)
+        if dep_vouch: static_scores.append(dep_vouch.score)
+        
         if lang == "python":
-            # Prioritize Ruff if available
-            if ruff_res:
-                parts.append((ruff_res.score, 0.10, f"Ruff: {ruff_res.reason}"))
-            elif python_static_res:
-                parts.append((python_static_res.score, 0.10, f"Static: {python_static_res.reason}"))
+            if ruff_res: static_scores.append(ruff_res.score)
+            elif python_static_res: static_scores.append(python_static_res.score)
         elif eslint_res:
-            parts.append((eslint_res.score, 0.10, f"ESLint: {eslint_res.reason}"))
+            static_scores.append(eslint_res.score)
+        
+        if static_scores:
+            avg_static = sum(static_scores) / len(static_scores)
+            parts.append((avg_static, 0.20, f"Rigour Static: Security/Dependency verified (Avg={avg_static:.1f})"))
+
+        # D. AI Gate (15%) - THE AUDITOR'S OPINION
+        if ai_res:
+            parts.append((ai_res.score, 0.15, f"AI Opinion: {ai_res.reason}"))
+
+        # E. Metrics/Refactoring Gate (5%)
+        if metrics_res:
+            parts.append((metrics_res.score, 0.05, f"Maintainability: {metrics_res.reason}"))
 
         # Normalized weight calculation
         total_weight = sum(p[1] for p in parts)
