@@ -5,7 +5,7 @@ import shutil
 import subprocess
 import uuid
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 
 from core.config import DEFAULT_POOL_SPECS, ENABLE_ENV_POOLING, POOL_BASE_DIR, POOL_MAX_SIZE
 
@@ -158,7 +158,6 @@ class PoolManager:
         python_exe = env_path / "Scripts" / "python.exe" if os.name == "nt" else env_path / "bin" / "python"
 
         logger.info(f"PoolManager: Preparing {spec_name} ({env_id}) using {uv_path}...")
-        debug_log(f"PoolManager: Starting preparation of {spec_name} ({env_id})")
         
         def run_cmd(cmd):
             return subprocess.run(

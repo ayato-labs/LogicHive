@@ -216,9 +216,8 @@ class SqliteStorage:
 
                 # 3. Perform SQL Keyword/Tag/Language Search (High-precision results)
                 sql_results = {}
-                select_fields = "name, description, language, tags, reliability_score, project, version, created_at, updated_at"
-                if include_code:
-                    select_fields = "*"
+                # ALWAYS include id and code even for summary mode to avoid KeyErrors
+                select_fields = "id, name, description, language, tags, reliability_score, project, version, created_at, updated_at, code"
 
                 if query_text or tags or language or project:
                     db = await get_db_connection()
@@ -439,15 +438,13 @@ class SqliteStorage:
     async def check_health(self) -> dict[str, Any]:
         """Checks if the database is accessible and the main table exists."""
         try:
-            db = await get_db_connection()
-            async with db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='logichive_functions'") as cursor:
-                row = await cursor.fetchone()
-                if row:
-                    await db.close()
-                    return {"status": "Healthy", "message": "Database and main table are OK."}
-                else:
-                    await db.close()
-                    return {"status": "Error", "message": "Table 'logichive_functions' not found."}
+            async with await get_db_connection() as db:
+                async with db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='logichive_functions'") as cursor:
+                    row = await cursor.fetchone()
+                    if row:
+                        return {"status": "Healthy", "message": "Database and main table are OK."}
+                    else:
+                        return {"status": "Error", "message": "Table 'logichive_functions' not found."}
         except Exception as e:
             return {"status": "Error", "message": f"Database check failed: {e}"}
 
