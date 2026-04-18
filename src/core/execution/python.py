@@ -100,7 +100,7 @@ class EphemeralPythonExecutor(BaseExecutor):
             # 3. Execute with isolated environment
             process_env = {
                 k: v for k, v in os.environ.items()
-                if k in ["PATH", "SYSTEMROOT", "SystemDrive", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP", "USERNAME"]
+                if k in ["PATH", "SYSTEMROOT", "SystemDrive", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP", "USERNAME", "HOME", "HOMEDRIVE", "HOMEPATH", "ProgramData"]
             }
             process_env["PYTHONPATH"] = ""
             process_env["PYTHONNOUSERSITE"] = "1"
