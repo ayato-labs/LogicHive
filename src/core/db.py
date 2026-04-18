@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import threading
 from functools import wraps
 
 import aiosqlite
@@ -8,29 +9,58 @@ from core.config import SQLITE_DB_PATH
 
 logger = logging.getLogger(__name__)
 
+# Single global connection to avoid "threads can only be started once" on Windows
+_global_db = None
+_db_lock = asyncio.Lock()
+_creator_loop = None
 
 async def get_db_connection() -> aiosqlite.Connection:
     """
-    Returns an asynchronus SQLite connection with WAL mode and busy timeout enabled.
-    Evaluates DB_PATH dynamically to support test environment overrides.
+    Returns a persistent shared SQLite connection.
+    Includes loop-affinity check for Windows stability.
     """
-    db = await aiosqlite.connect(SQLITE_DB_PATH)
-    db.row_factory = aiosqlite.Row
+    global _global_db, _creator_loop
+    current_loop = asyncio.get_running_loop()
+    
+    async with _db_lock:
+        # If loop changed, we MUST re-initialize because aiosqlite threads 
+        # are tied to the creator's event loop environment.
+        if _global_db is not None and _creator_loop is not current_loop:
+            logger.warning(f"Loop affinity change detected. Re-initializing DB.")
+            # We don't await close on the old connection because it might be tied 
+            # to a dead loop, which causes a hang. We orphan it.
+            _global_db = None
 
-    # Enable WAL mode for concurrency
-    await db.execute("PRAGMA journal_mode=WAL;")
-    await db.execute("PRAGMA synchronous=NORMAL;")
-    await db.execute("PRAGMA busy_timeout=5000;")
+        if _global_db is None:
+            _global_db = await aiosqlite.connect(SQLITE_DB_PATH)
+            _global_db.row_factory = aiosqlite.Row
+            _creator_loop = current_loop
+            
+            await _global_db.execute("PRAGMA journal_mode=WAL;")
+            await _global_db.execute("PRAGMA synchronous=NORMAL;")
+            await _global_db.execute("PRAGMA busy_timeout=5000;")
+            
+        return _global_db
 
-    return db
+async def close_db_connection():
+    """Explicitly closes the global connection."""
+    global _global_db, _creator_loop
+    async with _db_lock:
+        if _global_db is not None:
+            try:
+                # We only try to close if we are in the same loop
+                if _creator_loop is asyncio.get_running_loop():
+                    await _global_db.close()
+            except Exception as e:
+                logger.warning(f"Error closing shared DB: {e}")
+            finally:
+                _global_db = None
+                _creator_loop = None
 
+async def init_connection_pragmas(db: aiosqlite.Connection):
+    pass
 
 def retry_on_db_lock(max_retries: int = 5, base_delay: float = 0.1):
-    """
-    Decorator to retry async database operations on 'database is locked' errors
-    using exponential backoff.
-    """
-
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -41,15 +71,10 @@ def retry_on_db_lock(max_retries: int = 5, base_delay: float = 0.1):
                 except aiosqlite.OperationalError as e:
                     if "database is locked" in str(e).lower() and retries < max_retries:
                         delay = base_delay * (2**retries)
-                        logger.warning(
-                            f"Database locked. Retrying '{func.__name__}' in {delay:.2f}s... "
-                            f"(Attempt {retries + 1}/{max_retries})"
-                        )
+                        logger.warning(f"DB Locked. Retry {retries+1}")
                         await asyncio.sleep(delay)
                         retries += 1
                     else:
                         raise
-
         return wrapper
-
     return decorator

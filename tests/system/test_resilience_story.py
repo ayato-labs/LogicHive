@@ -58,8 +58,9 @@ async def test_story_agent_resilience_and_stability():
         
         # Check integrity while pool might still be working in background
         integrity = await check_integrity()
+        # Vector store might be 'Warning' if no embeddings are saved yet, which is fine.
         assert integrity["status"] in ("Healthy", "Warning")
-        assert "pool" in integrity["details"]
+        assert "pool_manager" in integrity["details"]
     except asyncio.TimeoutError:
         pytest.fail("EOF Resilience Test Failed: Pool initialization blocked the event loop for too long.")
 

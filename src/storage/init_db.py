@@ -5,14 +5,16 @@ import sys
 # Add backend to sys.path to import core
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
-from core.db import get_db_connection
+from core.db import get_db_connection, init_connection_pragmas
 
 
 async def init_db():
     print(
         f"Initializing personal LogicHive vault at {os.getenv('SQLITE_DB_PATH', 'logichive.db')}..."
     )
-    db = await get_db_connection()
+    db_ctx = await get_db_connection()
+    async with db_ctx as db:
+        await init_connection_pragmas(db)
 
     # Main table for current versions
     await db.execute("""
@@ -71,7 +73,6 @@ async def init_db():
     )
 
     await db.commit()
-    await db.close()
     print("Personal database initialization complete.")
 
 

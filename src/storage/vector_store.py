@@ -158,7 +158,6 @@ class VectorIndexManager:
                 "SELECT project, name, embedding FROM logichive_functions WHERE embedding IS NOT NULL"
             ) as cursor:
                 rows = await cursor.fetchall()
-            await db.close()
 
             self.index = faiss.IndexFlatIP(self.dimension)
             self.id_to_name = {}

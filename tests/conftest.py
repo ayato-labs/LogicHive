@@ -1,3 +1,4 @@
+import asyncio
 import os
 
 import pytest
@@ -142,10 +143,14 @@ def mock_intel():
 @pytest.fixture
 async def test_db():
     from storage.init_db import init_db
+    from core.db import close_db_connection
     # File removal is now handled in clear_cache autouse fixture for reliability
     await init_db()
+    # Explicitly pause to allow aiosqlite threads to settle if needed
+    await asyncio.sleep(0.1)
     yield
-    # No cleanup here; let the next test handle it or clear_cache handle it
+    # CRITICAL: Close the singleton connection after each test to avoid thread reuse errors
+    await close_db_connection()
 
 
 @pytest.fixture(autouse=True)
