@@ -181,6 +181,11 @@ async def do_save_async(
     if "[AI-DRAFT]" in desc_upper or "DRAFT" in desc_upper or "[AI_DRAFT]" in desc_upper:
         threshold = 0.0
 
+    if eval_res.get("is_system_error"):
+        logger.error(f"Orchestrator: System Error during Quality Gate: {reason}")
+        # Use AIProviderError or a general infrastructure error
+        raise LogicHiveError(f"Infrastructure Failure: {reason}")
+
     if final_score < threshold:
         logger.warning(
             f"Orchestrator: Quality Gate REJECTED '{name}' (Score: {final_score:.1f}, Reason: {reason})"

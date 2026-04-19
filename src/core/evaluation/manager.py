@@ -140,6 +140,7 @@ class EvaluationManager:
                     "score": 0.0,
                     "reason": f"Critical Failure: {struct_res.reason}",
                     "details": {"structural": struct_res},
+                    "is_system_error": struct_res.is_system_error,
                 }
             results["structural"] = struct_res
         else:
@@ -162,7 +163,9 @@ class EvaluationManager:
             name = eval_map[i]
             if isinstance(res, Exception):
                 logger.error(f"EvaluationManager: Evaluator '{name}' failed: {res}")
-                results[name] = EvaluationResult(score=0.0, reason=f"Evaluator error: {res}")
+                results[name] = EvaluationResult(
+                    score=0.0, reason=f"Evaluator error: {res}", is_system_error=True
+                )
             else:
                 results[name] = res
 
@@ -198,8 +201,15 @@ class EvaluationManager:
             return {
                 "score": 0.0,
                 "reason": f"DEPENDENCY REJECTION: {dep_vouch.reason}",
-                "details": {k: {"score": v.score, "reason": v.reason} for k, v in results.items()},
+                "details": {
+                    k: {"score": v.score, "reason": v.reason, "is_system_error": v.is_system_error}
+                    for k, v in results.items()
+                },
+                "is_system_error": any(v.is_system_error for v in results.values()),
             }
+
+        # Check for system errors in critical gates even if score isn't 0
+        aggregate_system_error = any(v.is_system_error for v in results.values())
 
         # 4. Weighted Calculation
         # Weights: Deterministic (30%), Runtime (30%), Static/Security (20%), AI (15%), Metrics (5%)
@@ -297,7 +307,13 @@ class EvaluationManager:
             "score": final_score,
             "reason": " | ".join(reasons),
             "details": {
-                k: {"score": v.score, "reason": v.reason, "details": v.details or {}}
+                k: {
+                    "score": v.score,
+                    "reason": v.reason,
+                    "details": v.details,
+                    "is_system_error": v.is_system_error,
+                }
                 for k, v in results.items()
             },
+            "is_system_error": aggregate_system_error,
         }

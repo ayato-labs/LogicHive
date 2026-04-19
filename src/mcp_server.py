@@ -218,7 +218,7 @@ async def save_function(
 
         return "\n".join(report)
     except LogicHiveError as e:
-        return f"LogicHive Error: {str(e)}"
+        return f"LogicHive SYSTEM ERROR: {str(e)}\n\n(This is likely a transient infrastructure issue, not a problem with your code. Please try again in a few moments.)"
     except Exception as e:
         return f"Unexpected Error: {str(e)}"
 
@@ -363,7 +363,8 @@ async def check_integrity(wait_for_previous: bool = False) -> str:
 
         return "\n".join(status)
     except Exception as e:
-        return f"Integrity Check Failed: {str(e)}"
+        import traceback
+        return f"Integrity Check Failed: {str(e)}\n\n{traceback.format_exc()}"
 
 
 if __name__ == "__main__":

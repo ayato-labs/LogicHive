@@ -29,6 +29,6 @@ class AIGateEvaluator(BaseEvaluator):
             return EvaluationResult(score=score, reason=reason)
         except Exception as e:
             logger.error(f"AIGateEvaluator: AI Evaluation failed: {e}")
-            # We don't return 0 here because it might be a transient AI error.
-            # The manager will handle the fallback.
-            raise
+            return EvaluationResult(
+                score=0.0, reason=f"AI Provider Transient Error: {e}", is_system_error=True
+            )

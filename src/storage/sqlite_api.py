@@ -325,17 +325,6 @@ class SqliteStorage:
             logger.error(f"SQLite: Increment failed for '{name}': {e}")
             return False
 
-    async def get_function_count(self) -> int:
-        """Returns the total number of functions in the vault."""
-        try:
-            db = await get_db_connection()
-            async with db.execute("SELECT count(*) FROM logichive_functions") as cursor:
-                row = await cursor.fetchone()
-                return row[0] if row else 0
-        except Exception as e:
-            logger.error(f"SQLite: Failed to count functions: {e}")
-            return 0
-
     async def check_health(self) -> dict[str, Any]:
         """Checks if the database is accessible and the main table exists."""
         try:
