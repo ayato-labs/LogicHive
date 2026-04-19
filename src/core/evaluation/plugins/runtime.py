@@ -34,6 +34,7 @@ class RuntimeEvaluator(BaseEvaluator):
         dependencies = kwargs.get("dependencies", [])
         mock_imports = kwargs.get("mock_imports", [])
         timeout = kwargs.get("timeout", DEFAULT_VERIFICATION_TIMEOUT)
+        memory_limit_mb = kwargs.get("memory_limit_mb", 256) # Default to 256MB if not specified
 
         if not test_code:
             return EvaluationResult(
@@ -50,7 +51,7 @@ class RuntimeEvaluator(BaseEvaluator):
                 reason=f"Infrastructure Error: No executor available for language '{language}'.",
                 details={"status": "not_supported"}
             )
-
+        
         # 3. Execute
         try:
             result = await executor.execute(
@@ -58,7 +59,8 @@ class RuntimeEvaluator(BaseEvaluator):
                 test_code=test_code,
                 dependencies=dependencies,
                 timeout=timeout,
-                mock_imports=mock_imports
+                mock_imports=mock_imports,
+                memory_limit_mb=memory_limit_mb
             )
 
             # 4. Map ExecutionResult to EvaluationResult
@@ -78,6 +80,16 @@ class RuntimeEvaluator(BaseEvaluator):
                 return EvaluationResult(
                     score=0.0,
                     reason=f"Critical Failure: Execution timed out after {timeout} seconds. Possible infinite loop.",
+                    details={
+                        "status": result.status.value,
+                        "duration_ms": int(result.duration * 1000) if result.duration else 0
+                    }
+                )
+
+            elif result.status == ExecutionStatus.MEMORY_LIMIT:
+                return EvaluationResult(
+                    score=0.0,
+                    reason=f"Critical Failure: Memory limit exceeded ({memory_limit_mb}MB).",
                     details={
                         "status": result.status.value,
                         "duration_ms": int(result.duration * 1000) if result.duration else 0
