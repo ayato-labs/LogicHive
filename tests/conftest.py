@@ -144,10 +144,11 @@ def mock_intel():
 async def test_db():
     from storage.init_db import init_db
     from core.db import close_db_connection
-    # File removal is now handled in clear_cache autouse fixture for reliability
+    # Ensure any previous connection is closed/reset before initializing
+    await close_db_connection()
     await init_db()
-    # Explicitly pause to allow aiosqlite threads to settle if needed
-    await asyncio.sleep(0.1)
+    # Give a tiny buffer for SQLite/aiosqlite state settle
+    await asyncio.sleep(0.05)
     yield
     # CRITICAL: Close the singleton connection after each test to avoid thread reuse errors
     await close_db_connection()

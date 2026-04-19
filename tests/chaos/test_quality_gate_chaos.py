@@ -21,8 +21,8 @@ async def test_chaos_infinite_loop_resilience():
     )
     
     runtime_res = results["details"]["runtime"]
-    assert runtime_res.score == 0.0
-    assert "timeout" in runtime_res.reason.lower() or "Possible infinite loop" in runtime_res.reason
+    assert runtime_res["score"] == 0.0
+    assert "timeout" in runtime_res["reason"].lower() or "Possible infinite loop" in runtime_res["reason"]
 
 @pytest.mark.asyncio
 async def test_chaos_network_access_blocked():
@@ -40,8 +40,8 @@ async def test_chaos_network_access_blocked():
     )
     
     runtime_res = results["details"]["runtime"]
-    assert runtime_res.score == 0.0
-    assert "NETWORK_ACCESS_DENIED" in runtime_res.reason
+    assert runtime_res["score"] == 0.0
+    assert "NETWORK_ACCESS_DENIED" in runtime_res["reason"]
 
 @pytest.mark.asyncio
 async def test_chaos_memory_bomb_resilience():
@@ -62,8 +62,8 @@ async def test_chaos_memory_bomb_resilience():
     )
     
     runtime_res = results["details"]["runtime"]
-    assert runtime_res.score == 0.0
-    assert "Memory limit exceeded" in runtime_res.reason
+    assert runtime_res["score"] == 0.0
+    assert "Memory limit exceeded" in runtime_res["reason"]
 
 @pytest.mark.asyncio
 async def test_chaos_infra_exception_isolation():
@@ -91,5 +91,5 @@ async def test_chaos_infra_exception_isolation():
     
     # The whole evaluation shouldn't crash, and we should have an error result for this evaluator
     assert "crash_test" in results["details"]
-    assert results["details"]["crash_test"].score == 0.0
-    assert "CRASH SIMULATION" in results["details"]["crash_test"].reason
+    assert results["details"]["crash_test"]["score"] == 0.0
+    assert "CRASH SIMULATION" in results["details"]["crash_test"]["reason"]

@@ -24,14 +24,14 @@ async def test_instrumentation_propagation_full(fake_intel):
     
     # Check that 'runtime' evaluator data is present
     assert "runtime" in results["details"]
-    runtime_details = results["details"]["runtime"]["details"]
+    runtime_res = results["details"]["runtime"]
     
-    # Verify instrumentation metrics actually arrived
-    assert "duration_ms" in runtime_details
-    assert runtime_details["duration_ms"] >= 0
-    assert "status" in runtime_details
+    # Verify instrumentation metrics actually arrived (now in dict format)
+    assert "duration_ms" in runtime_res["details"]
+    assert runtime_res["details"]["duration_ms"] >= 0
+    assert "status" in runtime_res["details"]
     
-    # Also verify the EvaluationManager returned them in its own top-level details if we updated it
-    # Note: In EvaluationManager.evaluate_all, we return a dict. Let's check its structure.
-    # From manager.py: results is a dict mapping name -> EvaluationResult
-    assert isinstance(results["details"]["runtime"], EvaluationResult)
+    # Verify the structure: it should be a dict conforming to EvaluationResult fields
+    assert "score" in runtime_res
+    assert "reason" in runtime_res
+    assert isinstance(runtime_res, dict)

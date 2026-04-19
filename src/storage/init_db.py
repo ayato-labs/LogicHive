@@ -12,9 +12,8 @@ async def init_db():
     print(
         f"Initializing personal LogicHive vault at {os.getenv('SQLITE_DB_PATH', 'logichive.db')}..."
     )
-    db_ctx = await get_db_connection()
-    async with db_ctx as db:
-        await init_connection_pragmas(db)
+    db = await get_db_connection()
+    await init_connection_pragmas(db)
 
     # Main table for current versions
     await db.execute("""
