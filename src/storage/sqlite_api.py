@@ -299,6 +299,17 @@ class SqliteStorage:
     async def get_all_functions(self) -> list[dict[str, Any]]:
         return await self.get_functions(limit=1000)
 
+    async def get_function_count(self) -> int:
+        """Returns the total number of functions in the vault."""
+        try:
+            db = await get_db_connection()
+            async with db.execute("SELECT COUNT(*) FROM logichive_functions") as cursor:
+                row = await cursor.fetchone()
+                return row[0] if row else 0
+        except Exception as e:
+            logger.error(f"SQLite: Failed to get function count: {e}")
+            return 0
+
     @retry_on_db_lock()
     @with_write_lock
     async def increment_call_count(self, name: str, project: str = "default") -> bool:

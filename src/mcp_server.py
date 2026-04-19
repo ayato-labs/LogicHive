@@ -210,7 +210,7 @@ async def save_function(
                 report.append(f"- {tool_name}: {tool_score:.1f} ({tool_reason})")
 
                 # Show traceback or stderr if available (Crucial for debugging)
-                inner_details = res.get("details", {})
+                inner_details = res.get("details", {}) or {}
                 if inner_details.get("traceback"):
                     report.append(f"  [TRACEBACK]\n{inner_details['traceback']}")
                 elif inner_details.get("stderr"):
