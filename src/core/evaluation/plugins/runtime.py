@@ -1,5 +1,4 @@
 import logging
-from time import perf_counter
 
 from ...config import DEFAULT_VERIFICATION_TIMEOUT
 from ...execution.base import ExecutionStatus
@@ -34,13 +33,13 @@ class RuntimeEvaluator(BaseEvaluator):
         dependencies = kwargs.get("dependencies", [])
         mock_imports = kwargs.get("mock_imports", [])
         timeout = kwargs.get("timeout", DEFAULT_VERIFICATION_TIMEOUT)
-        memory_limit_mb = kwargs.get("memory_limit_mb", 256) # Default to 256MB if not specified
+        memory_limit_mb = kwargs.get("memory_limit_mb", 256)  # Default to 256MB if not specified
 
         if not test_code:
             return EvaluationResult(
                 score=40.0,
                 reason="No test code provided. Verification skipped.",
-                details={"status": "missing_tests"}
+                details={"status": "missing_tests"},
             )
 
         # 2. Get Executor
@@ -49,9 +48,9 @@ class RuntimeEvaluator(BaseEvaluator):
             return EvaluationResult(
                 score=0.0,
                 reason=f"Infrastructure Error: No executor available for language '{language}'.",
-                details={"status": "not_supported"}
+                details={"status": "not_supported"},
             )
-        
+
         # 3. Execute
         try:
             result = await executor.execute(
@@ -60,7 +59,7 @@ class RuntimeEvaluator(BaseEvaluator):
                 dependencies=dependencies,
                 timeout=timeout,
                 mock_imports=mock_imports,
-                memory_limit_mb=memory_limit_mb
+                memory_limit_mb=memory_limit_mb,
             )
 
             # 4. Map ExecutionResult to EvaluationResult
@@ -72,18 +71,21 @@ class RuntimeEvaluator(BaseEvaluator):
                         "duration": result.duration,
                         "duration_ms": int(result.duration * 1000) if result.duration else 0,
                         "stdout": result.logs.stdout,
-                        "status": result.status.value
-                    }
+                        "status": result.status.value,
+                    },
                 )
 
             elif result.status == ExecutionStatus.TIMEOUT:
+                # Suggest environmental overhead as a possibility (User feedback Tip #2)
                 return EvaluationResult(
                     score=0.0,
-                    reason=f"Critical Failure: Execution timed out after {timeout} seconds. Possible infinite loop.",
+                    reason=f"Critical Failure: Execution timed out after {timeout} seconds. (Possible causes: Infinite loop, heavy imports, or environment overhead)",
                     details={
                         "status": result.status.value,
-                        "duration_ms": int(result.duration * 1000) if result.duration else 0
-                    }
+                        "duration_ms": int(result.duration * 1000) if result.duration else 0,
+                        "stdout": result.logs.stdout,
+                        "stderr": result.logs.stderr,
+                    },
                 )
 
             elif result.status == ExecutionStatus.MEMORY_LIMIT:
@@ -92,8 +94,8 @@ class RuntimeEvaluator(BaseEvaluator):
                     reason=f"Critical Failure: Memory limit exceeded ({memory_limit_mb}MB).",
                     details={
                         "status": result.status.value,
-                        "duration_ms": int(result.duration * 1000) if result.duration else 0
-                    }
+                        "duration_ms": int(result.duration * 1000) if result.duration else 0,
+                    },
                 )
 
             elif result.status == ExecutionStatus.FAILURE:
@@ -107,8 +109,8 @@ class RuntimeEvaluator(BaseEvaluator):
                     details={
                         "traceback": result.error.traceback if result.error else "",
                         "stderr": result.logs.stderr,
-                        "status": result.status.value
-                    }
+                        "status": result.status.value,
+                    },
                 )
 
             else:
@@ -116,7 +118,7 @@ class RuntimeEvaluator(BaseEvaluator):
                 return EvaluationResult(
                     score=10.0,
                     reason=f"Infrastructure Warning: Execution environment error. {result.logs.stderr}",
-                    details={"status": result.status.value}
+                    details={"status": result.status.value},
                 )
 
         except Exception as e:
@@ -124,5 +126,5 @@ class RuntimeEvaluator(BaseEvaluator):
             return EvaluationResult(
                 score=0.0,
                 reason=f"Critical Evaluator Error: {str(e)}",
-                details={"error_type": type(e).__name__}
+                details={"error_type": type(e).__name__},
             )

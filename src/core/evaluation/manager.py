@@ -39,19 +39,21 @@ class EvaluationManager:
             package_names = [
                 f"{__package__}.plugins" if __package__ else None,
                 "core.evaluation.plugins",
-                "src.core.evaluation.plugins"
+                "src.core.evaluation.plugins",
             ]
 
             for pkg_name in [p for p in package_names if p]:
                 try:
                     pkg = importlib.import_module(pkg_name)
-                    for loader, name, is_pkg in pkgutil.walk_packages(pkg.__path__, pkg.__name__ + "."):
+                    for loader, name, is_pkg in pkgutil.walk_packages(
+                        pkg.__path__, pkg.__name__ + "."
+                    ):
                         try:
                             modules.append(importlib.import_module(name))
                         except ImportError:
                             continue
                     if modules:
-                        break # Successfully loaded via package
+                        break  # Successfully loaded via package
                 except ImportError:
                     continue
 
@@ -68,7 +70,9 @@ class EvaluationManager:
                                 spec.loader.exec_module(mod)
                                 modules.append(mod)
                         except Exception as e:
-                            logger.error(f"EvaluationManager: Failed to load {filename} via fallback: {e}")
+                            logger.error(
+                                f"EvaluationManager: Failed to load {filename} via fallback: {e}"
+                            )
 
             # 3. Instantiate evaluators from discovered modules
             for module in modules:
@@ -85,7 +89,9 @@ class EvaluationManager:
                                 self.evaluators.append(inst)
                                 logger.info(f"EvaluationManager: Loaded plugin '{inst.name}'")
                         except Exception as e:
-                            logger.error(f"EvaluationManager: Failed to instantiate {attr_name}: {e}")
+                            logger.error(
+                                f"EvaluationManager: Failed to instantiate {attr_name}: {e}"
+                            )
 
         except Exception as e:
             logger.error(f"EvaluationManager: Plugin discovery process failed: {e}")
@@ -115,12 +121,14 @@ class EvaluationManager:
             or "AI-DRAFT" in desc
         )
 
-        # If it's not a draft and has NO test code, it's a 'Sophistry' attempt or incomplete asset.
+        # If it's not a draft and has NO test code, we flag it as 'Unverified' (Score 40)
+        # This allows the asset to be saved if the threshold is lowered (e.g. for Drafts)
+        # while preventing it from reaching the 'Verified' status (Score 70+)
         if not is_draft and not test_code:
             return {
-                "score": 0.0,
-                "reason": "Security/Stability Failure: Non-draft assets MUST have meaningful test code to be VERIFIED.",
-                "details": {"system": "Rigor Gate"},
+                "score": 40.0,
+                "reason": "Unverified Asset: No test code provided. Use [AI-DRAFT] in description to skip verification check.",
+                "details": {"system": "Rigor Gate", "status": "missing_tests"},
             }
 
         # 1. Critical Step: Structural check first
@@ -135,9 +143,7 @@ class EvaluationManager:
                 }
             results["structural"] = struct_res
         else:
-            logger.warning(
-                "EvaluationManager: StructuralEvaluator not found in plugins."
-            )
+            logger.warning("EvaluationManager: StructuralEvaluator not found in plugins.")
 
         # 2. Run others (AI, Static, Runtime)
         tasks = []
@@ -156,9 +162,7 @@ class EvaluationManager:
             name = eval_map[i]
             if isinstance(res, Exception):
                 logger.error(f"EvaluationManager: Evaluator '{name}' failed: {res}")
-                results[name] = EvaluationResult(
-                    score=0.0, reason=f"Evaluator error: {res}"
-                )
+                results[name] = EvaluationResult(score=0.0, reason=f"Evaluator error: {res}")
             else:
                 results[name] = res
 
@@ -169,12 +173,12 @@ class EvaluationManager:
         ai_res = results.get("ai_gate")
         det_res = results.get("deterministic")
         runtime_res = results.get("runtime")
-        
+
         # New Rigour-inspired evaluators
         sec_static = results.get("security_static")
         dep_vouch = results.get("dependency_vouch")
         metrics_res = results.get("metrics_gate")
-        
+
         # Fallback static evaluators
         python_static_res = results.get("python_static")
         ruff_res = results.get("ruff")
@@ -188,7 +192,7 @@ class EvaluationManager:
                 "reason": f"SECURITY REJECTION: {sec_static.reason}",
                 "details": {k: {"score": v.score, "reason": v.reason} for k, v in results.items()},
             }
-        
+
         # If dependency check finds hallucinations, it's a 'garbage' logic. reject.
         if dep_vouch and dep_vouch.score < 70:
             return {
@@ -208,7 +212,10 @@ class EvaluationManager:
                 return {
                     "score": 0.0,
                     "reason": f"DETERMINISTIC REJECTION: {det_res.reason}",
-                    "details": {k: {"score": v.score, "reason": v.reason} for k, v in results.items()},
+                    "details": {
+                        k: {"score": v.score, "reason": v.reason, "details": v.details}
+                        for k, v in results.items()
+                    },
                 }
             parts.append((det_score, 0.30, f"Facts: {det_res.reason}"))
 
@@ -219,24 +226,37 @@ class EvaluationManager:
                 return {
                     "score": 0.0,
                     "reason": f"Critical Logic Failure (Verified Asset): {runtime_res.reason}",
-                    "details": {k: {"score": v.score, "reason": v.reason} for k, v in results.items()},
+                    "details": {
+                        k: {"score": v.score, "reason": v.reason, "details": v.details}
+                        for k, v in results.items()
+                    },
                 }
             parts.append((runtime_score, 0.30, f"Runtime: {runtime_res.reason}"))
 
         # C. Static/Security Analysis (20%)
         static_scores = []
-        if sec_static: static_scores.append(sec_static.score)
-        if dep_vouch: static_scores.append(dep_vouch.score)
-        
+        if sec_static:
+            static_scores.append(sec_static.score)
+        if dep_vouch:
+            static_scores.append(dep_vouch.score)
+
         if lang == "python":
-            if ruff_res: static_scores.append(ruff_res.score)
-            elif python_static_res: static_scores.append(python_static_res.score)
+            if ruff_res:
+                static_scores.append(ruff_res.score)
+            elif python_static_res:
+                static_scores.append(python_static_res.score)
         elif eslint_res:
             static_scores.append(eslint_res.score)
-        
+
         if static_scores:
             avg_static = sum(static_scores) / len(static_scores)
-            parts.append((avg_static, 0.20, f"Rigour Static: Security/Dependency verified (Avg={avg_static:.1f})"))
+            parts.append(
+                (
+                    avg_static,
+                    0.20,
+                    f"Rigour Static: Security/Dependency verified (Avg={avg_static:.1f})",
+                )
+            )
 
         # D. AI Gate (15%) - THE AUDITOR'S OPINION
         if ai_res:
@@ -259,7 +279,10 @@ class EvaluationManager:
                 ai_score = ai_res.score
                 if ai_score < 30:
                     final_score = 0.0
-                    reasons.insert(0, "VETO: AI Auditor identified 'Quality Theater' - Opinion confirmed rejection.")
+                    reasons.insert(
+                        0,
+                        "VETO: AI Auditor identified 'Quality Theater' - Opinion confirmed rejection.",
+                    )
                 elif ai_score < 70:
                     final_score = min(raw_final, ai_score)
                 else:
@@ -274,10 +297,7 @@ class EvaluationManager:
             "score": final_score,
             "reason": " | ".join(reasons),
             "details": {
-                k: {
-                    "score": v.score, 
-                    "reason": v.reason,
-                    "details": v.details
-                } for k, v in results.items()
+                k: {"score": v.score, "reason": v.reason, "details": v.details}
+                for k, v in results.items()
             },
         }

@@ -46,22 +46,16 @@ def extract_dependencies(code: str, language: str = "python") -> list[str]:
                         base = node.module.split(".")[0]
                         dependencies.add(base)
         except Exception as e:
-            logger.warning(
-                f"Orchestrator: AST extraction failed, falling back to regex: {e}"
-            )
+            logger.warning(f"Orchestrator: AST extraction failed, falling back to regex: {e}")
             # Fallback to regex for Python if AST fails
-            matches = re.findall(
-                r"^(?:import|from)\s+([a-zA-Z0-9_]+)", code, re.MULTILINE
-            )
+            matches = re.findall(r"^(?:import|from)\s+([a-zA-Z0-9_]+)", code, re.MULTILINE)
             dependencies.update(matches)
 
     elif lang in ["typescript", "javascript", "tsx", "jsx"]:
         # Regex for ES6 imports: from 'pkg' or from "pkg" (robust whitespace)
         es6_matches = re.findall(r"from\s+['\"]([^'\"./][^'\"]*)['\"]", code)
         # Regex for CommonJS: require('pkg')
-        cjs_matches = re.findall(
-            r"require\s*\(\s*['\"]([^'\"./][^'\"]*)['\"]\s*\)", code
-        )
+        cjs_matches = re.findall(r"require\s*\(\s*['\"]([^'\"./][^'\"]*)['\"]\s*\)", code)
         # Simple import 'pkg'
         simple_matches = re.findall(r"import\s+['\"]([^'\"./][^'\"]*)['\"]", code)
 
@@ -150,13 +144,16 @@ async def do_save_async(
     # --- 1. Evaluate Logic Asset (New Plugin System) ---
     # Enforce Hard Safety Limit on timeout if provided
     if timeout is not None and timeout > MAX_VERIFICATION_TIMEOUT:
-        logger.warning(f"Orchestrator: Requested timeout {timeout}s exceeds Hard Limit {MAX_VERIFICATION_TIMEOUT}s. Capping.")
+        logger.warning(
+            f"Orchestrator: Requested timeout {timeout}s exceeds Hard Limit {MAX_VERIFICATION_TIMEOUT}s. Capping."
+        )
         timeout = MAX_VERIFICATION_TIMEOUT
 
     eval_manager = EvaluationManager()
     from time import perf_counter
+
     start_eval = perf_counter()
-    
+
     try:
         eval_res = await eval_manager.evaluate_all(
             code,
@@ -171,7 +168,7 @@ async def do_save_async(
     except Exception as e:
         logger.exception(f"Orchestrator: CRITICAL ERROR during Quality Gate execution: {e}")
         raise ValidationError(f"Quality Gate Infrastructure Failure: {str(e)}")
-    
+
     eval_duration_ms = int((perf_counter() - start_eval) * 1000)
 
     final_score = eval_res["score"]
@@ -188,8 +185,14 @@ async def do_save_async(
         logger.warning(
             f"Orchestrator: Quality Gate REJECTED '{name}' (Score: {final_score:.1f}, Reason: {reason})"
         )
+        # Pass the full result including details back to the caller
         raise ValidationError(
-            f"Quality Gate rejected asset: {reason}", details={"score": final_score}
+            f"Quality Gate rejected asset: {reason}",
+            details={
+                "score": final_score,
+                "reason": reason,
+                "eval_details": eval_res.get("details", {}),
+            },
         )
 
     logger.info(
@@ -221,15 +224,14 @@ async def do_save_async(
     if not dependencies:
         extracted = extract_dependencies(code, language=language)
         if extracted:
-            logger.info(
-                f"Orchestrator: Auto-extracted dependencies ({language}): {extracted}"
-            )
+            logger.info(f"Orchestrator: Auto-extracted dependencies ({language}): {extracted}")
             dependencies = extracted
 
     # 7. Final data preparation and save
     from core.system_info import SystemFingerprint
+
     data = {
-        "id": str(uuid.uuid4()), # Explicit ID if not existing, though upsert handles it
+        "id": str(uuid.uuid4()),  # Explicit ID if not existing, though upsert handles it
         "name": str(name),
         "code": str(code),
         "description": str(description),
@@ -300,6 +302,7 @@ async def do_search_async(
             f"Orchestrator: Weak results (Score: {top_score:.2f}) and Generation intent detected. Triggering..."
         )
         from core.plugins.draft_generator import DraftGenerator
+
         generator = DraftGenerator(intel)
         draft = await generator.generate_draft(
             query, initial_results, language=language or "python"
@@ -325,30 +328,31 @@ async def check_integrity() -> dict[str, Any]:
     """
     Checks the health of various components (Database, Vector Index, Pool).
     """
+    from core.execution.pool import pool_manager
     from storage.sqlite_api import sqlite_storage
     from storage.vector_store import vector_manager
-    from core.execution.pool import pool_manager
-    
+
     details = {}
-    
+
     # 1. DB Check
     db_health = await sqlite_storage.check_health()
     details["database"] = db_health
-    
+
     # 2. Vector Store Check
     vector_health = await vector_manager.check_health()
     details["vector_store"] = vector_health
-    
+
     # 3. Pool Check
     pool_health = await pool_manager.check_health()
     details["pool_manager"] = pool_health
-    
+
     status = "Healthy"
     if any(h.get("status") == "Error" for h in details.values()):
         status = "Error"
     elif any(h.get("status") == "Warning" for h in details.values()):
         status = "Warning"
-        
+
     return {"status": status, "details": details}
+
 
 # --- End of Orchestrator ---

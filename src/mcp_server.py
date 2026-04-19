@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+
 from fastmcp import FastMCP
 
 import orchestrator
@@ -25,7 +26,11 @@ mcp = FastMCP("LogicHive", lifespan=lifespan)
 
 @mcp.tool()
 async def search_functions(
-    query: str, limit: int = 5, language: str = None, project: str = None
+    query: str,
+    limit: int = 5,
+    language: str = None,
+    project: str = None,
+    wait_for_previous: bool = False,
 ) -> str:
     """
     Search for high-quality, reusable code functions within the LogicHive vault using Hybrid Search.
@@ -47,11 +52,10 @@ async def search_functions(
         limit: Max results. Default 5.
         language: Optional language to filter by (e.g., 'python', 'javascript').
         project: Optional project name to narrow the search.
+        wait_for_previous: Set to true to wait for all previously requested tools in this turn to complete before starting. Set to false (or omit) to run in parallel. Use true when this tool depends on the output of previous tools.
     """
     try:
-        results = await orchestrator.do_search_async(
-            query, limit, language, project=project
-        )
+        results = await orchestrator.do_search_async(query, limit, language, project=project)
         if not results:
             return "No matching functions found."
 
@@ -71,6 +75,7 @@ async def search_functions(
             stored_env = res.get("env_fingerprint")
             if stored_env:
                 from core.system_info import SystemFingerprint
+
                 if SystemFingerprint.compare(stored_env, SystemFingerprint.get_current()):
                     drift_warning = " ⚠️ [DRIFT]"
 
@@ -86,7 +91,7 @@ async def search_functions(
 
 
 @mcp.tool()
-async def get_function(name: str, project: str = "default") -> str:
+async def get_function(name: str, project: str = "default", wait_for_previous: bool = False) -> str:
     """
     Fetch the full source code and metadata of a specific function by its exact name and project.
     Use this AFTER search_functions if you've identified a promising candidate name.
@@ -94,6 +99,7 @@ async def get_function(name: str, project: str = "default") -> str:
     Args:
         name: The precise, case-sensitive name of the function (e.g., "save_log").
         project: The project namespace (defaults to 'default').
+        wait_for_previous: Set to true to wait for all previously requested tools in this turn to complete before starting. Set to false (or omit) to run in parallel. Use true when this tool depends on the output of previous tools.
     """
     try:
         f_data = await orchestrator.do_get_async(name, project=project)
@@ -111,6 +117,7 @@ async def get_function(name: str, project: str = "default") -> str:
         stored_env = f_data.get("env_fingerprint")
         if stored_env:
             from core.system_info import SystemFingerprint
+
             warning = SystemFingerprint.generate_warning_msg(stored_env)
             if warning:
                 drift_header = f"> [!WARNING]\n> {warning.replace(chr(10), chr(10) + '> ')}\n\n"
@@ -133,19 +140,20 @@ async def save_function(
     project: str = "default",
     mock_imports: list[str] = [],
     timeout: int = 60,
+    wait_for_previous: bool = False,
 ) -> str:
     """
     Saves a verified, high-quality code asset to the LogicHive vault for future reuse.
     The asset undergoes an automated Quality Gate check (AI grading & Static analysis).
 
     BEST PRACTICES FOR AI AGENTS:
-    1. Project Context: Always specify a 'project' name to avoid cluttering the global vault.
-    2. Metadata is Critical: Provide a detailed 'description' (min 10 chars).
-    3. Taxonomize: Use relevant 'tags' to ensure future discoverability.
-    4. Self-Test: Always include 'test_code' if possible to increase reliability score.
-    5. Smart Mocking: If the code uses heavy libraries (torch, sklearn) that cause timeouts during 
-       verification, add them to 'mock_imports' to bypass initialization while testing the logic shell.
-
+    1. Strategy Priority (Purity > Utility):
+       - PRIMARY: Extract pure logic from I/O code. Save only the "Logic Atom" (data processing, validation).
+       - SECONDARY: If you must save I/O-heavy code (e.g. retry patterns), use 'mock_imports' to bypass network/file calls.
+    2. Project Context: Always specify a 'project' name to avoid cluttering the global vault.
+    3. Metadata is Critical: Provide a detailed 'description' (min 10 chars).
+    4. Self-Test: Always include 'test_code'. Use mocks for I/O functions to ensure deterministic verification.
+    5. Smart Mocking: Add heavy libraries (torch) or I/O libraries (aiohttp, httpx) to 'mock_imports'.
     REJECTION CRITERIA:
     - Syntax errors (instant Score 0 / Critical failure).
     - Vague descriptions or missing tags.
@@ -168,6 +176,7 @@ async def save_function(
         project: Project name for logically grouping code (defaults to 'default').
         mock_imports: List of modules to mock during registration to avoid timeouts (e.g. ['torch']).
         timeout: Maximum execution time in seconds for the Quality Gate (Default 60s, Hard Limit 120s).
+        wait_for_previous: Set to true to wait for all previously requested tools in this turn to complete before starting. Set to false (or omit) to run in parallel. Use true when this tool depends on the output of previous tools.
     """
     try:
         success = await do_save_async(
@@ -182,11 +191,32 @@ async def save_function(
             mock_imports=mock_imports,
             timeout=timeout,
         )
-        return (
-            "Saved successfully to LogicHive" if success else "Failed (Unknown Error)"
-        )
+        return "Saved successfully to LogicHive" if success else "Failed (Unknown Error)"
     except ValidationError as e:
-        return f"Quality Gate REJECTED: {str(e)}"
+        # Extract rich details for better transparency (User feedback Tip #1)
+        details = e.details or {}
+        score = details.get("score", 0)
+        reason = details.get("reason", str(e))
+        eval_details = details.get("eval_details", {})
+
+        # Build a helpful report
+        report = [f"Quality Gate REJECTED: {reason}", f"Final Score: {score:.1f}/100"]
+
+        if eval_details:
+            report.append("\nBreakdown:")
+            for tool_name, res in eval_details.items():
+                tool_score = res.get("score", 0)
+                tool_reason = res.get("reason", "N/A")
+                report.append(f"- {tool_name}: {tool_score:.1f} ({tool_reason})")
+
+                # Show traceback or stderr if available (Crucial for debugging)
+                inner_details = res.get("details", {})
+                if inner_details.get("traceback"):
+                    report.append(f"  [TRACEBACK]\n{inner_details['traceback']}")
+                elif inner_details.get("stderr"):
+                    report.append(f"  [STDERR]\n{inner_details['stderr']}")
+
+        return "\n".join(report)
     except LogicHiveError as e:
         return f"LogicHive Error: {str(e)}"
     except Exception as e:
@@ -194,9 +224,12 @@ async def save_function(
 
 
 @mcp.tool()
-async def debug_db() -> str:
+async def debug_db(wait_for_previous: bool = False) -> str:
     """
     Debug tool to inspect LogicHive database configuration and table structure.
+
+    Args:
+        wait_for_previous: Set to true to wait for all previously requested tools in this turn to complete before starting. Set to false (or omit) to run in parallel. Use true when this tool depends on the output of previous tools.
     """
     import os
     import sqlite3
@@ -210,9 +243,7 @@ async def debug_db() -> str:
         try:
             status.append(f"Size: {os.path.getsize(SQLITE_DB_PATH)} bytes")
             conn = sqlite3.connect(SQLITE_DB_PATH)
-            tables = conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
+            tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
             status.append(f"Tables: {tables}")
             conn.close()
         except Exception as e:
@@ -222,7 +253,9 @@ async def debug_db() -> str:
 
 
 @mcp.tool()
-async def delete_function(name: str, project: str = "default") -> str:
+async def delete_function(
+    name: str, project: str = "default", wait_for_previous: bool = False
+) -> str:
     """
     Deletes a function from the LogicHive vault for a specific project.
     The function is archived in the backup repository for safety.
@@ -230,6 +263,7 @@ async def delete_function(name: str, project: str = "default") -> str:
     Args:
         name: The case-sensitive name of the function to delete.
         project: The project namespace (defaults to 'default').
+        wait_for_previous: Set to true to wait for all previously requested tools in this turn to complete before starting. Set to false (or omit) to run in parallel. Use true when this tool depends on the output of previous tools.
     """
     success = await do_delete_async(name, project=project)
     if success:
@@ -240,7 +274,7 @@ async def delete_function(name: str, project: str = "default") -> str:
 
 @mcp.tool()
 async def list_functions(
-    project: str = None, tags: list[str] = None, limit: int = 50
+    project: str = None, tags: list[str] = None, limit: int = 50, wait_for_previous: bool = False
 ) -> str:
     """
     List high-quality code functions with optional filtering by project and tags.
@@ -250,6 +284,7 @@ async def list_functions(
         project: Optional project name to filter by.
         tags: Optional list of tags to filter by.
         limit: Max results. Default 50.
+        wait_for_previous: Set to true to wait for all previously requested tools in this turn to complete before starting. Set to false (or omit) to run in parallel. Use true when this tool depends on the output of previous tools.
     """
     try:
         results = await orchestrator.do_list_async(project=project, tags=tags, limit=limit)
@@ -275,44 +310,57 @@ async def list_functions(
 
 
 @mcp.tool()
-async def check_integrity() -> str:
+async def check_integrity(wait_for_previous: bool = False) -> str:
     """
     Performs a comprehensive integrity check of the LogicHive system,
     including DB status, Vector store synchronization, and Environment pools.
+
+    Args:
+        wait_for_previous: Set to true to wait for all previously requested tools in this turn to complete before starting. Set to false (or omit) to run in parallel. Use true when this tool depends on the output of previous tools.
     """
     import os
-    from core.config import SQLITE_DB_PATH, FAISS_INDEX_PATH
+
+    from core.config import FAISS_INDEX_PATH, SQLITE_DB_PATH
     from storage.sqlite_api import sqlite_storage
     from storage.vector_store import vector_manager
 
     status = ["## LogicHive Integrity Report\n"]
-    
+
     try:
         # 1. DB Check
         db_exists = os.path.exists(SQLITE_DB_PATH)
-        status.append(f"### 1. Database\n- Path: `{SQLITE_DB_PATH}`\n- Status: {'✅ Connected' if db_exists else '❌ Missing'}")
-        
+        status.append(
+            f"### 1. Database\n- Path: `{SQLITE_DB_PATH}`\n- Status: {'✅ Connected' if db_exists else '❌ Missing'}"
+        )
+
         if db_exists:
             count = await sqlite_storage.get_function_count()
             status.append(f"- Record Count: {count}")
 
         # 2. Vector Store Check
         faiss_exists = os.path.exists(FAISS_INDEX_PATH)
-        status.append(f"### 2. Vector Store (FAISS)\n- Path: `{FAISS_INDEX_PATH}`\n- Status: {'✅ Loaded' if faiss_exists else '⚠️ Missing (Will rebuild on search)'}")
-        
+        status.append(
+            f"### 2. Vector Store (FAISS)\n- Path: `{FAISS_INDEX_PATH}`\n- Status: {'✅ Loaded' if faiss_exists else '⚠️ Missing (Will rebuild on search)'}"
+        )
+
         if faiss_exists and db_exists:
             # Check for sync (simplified count check)
             idx_size = vector_manager.index.ntotal if vector_manager.index else 0
             if idx_size != count:
-                status.append(f"- ⚠️ **Desync Detected**: DB({count}) vs FAISS({idx_size}). Rebuild recommended.")
+                status.append(
+                    f"- ⚠️ **Desync Detected**: DB({count}) vs FAISS({idx_size}). Rebuild recommended."
+                )
             else:
                 status.append(f"- Sync Status: ✅ Optimal ({idx_size} vectors)")
 
         # 3. Environment Pool Check
         from core.execution.pool import PoolManager
+
         pool = PoolManager.get_instance()
-        status.append(f"### 3. Environment Pool\n- Base Dir: `{pool.base_dir}`\n- GPU Available: {'✅' if pool.has_gpu else '❌'}")
-        
+        status.append(
+            f"### 3. Environment Pool\n- Base Dir: `{pool.base_dir}`\n- GPU Available: {'✅' if pool.has_gpu else '❌'}"
+        )
+
         return "\n".join(status)
     except Exception as e:
         return f"Integrity Check Failed: {str(e)}"

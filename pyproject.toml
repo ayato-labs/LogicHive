@@ -26,6 +26,8 @@ dependencies = [
     "pandas",
     "pyinstaller",
     "psutil",
+    "aiohttp>=3.13.5",
+    "pydantic>=2.12.5",
 ]
 
 [tool.setuptools.packages.find]
