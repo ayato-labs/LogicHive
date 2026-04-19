@@ -30,11 +30,7 @@ def get_config_paths():
                 / "globalStorage"
                 / "googlecloudtools.cloudcode"
                 / "mcp_config.json",
-                "VSCode_Generic": appdata
-                / "Code"
-                / "User"
-                / "globalStorage"
-                / "mcp_config.json",
+                "VSCode_Generic": appdata / "Code" / "User" / "globalStorage" / "mcp_config.json",
             }
         )
     elif system == "Darwin":  # macOS
@@ -95,7 +91,7 @@ def inject_instructions():
 
     if gemini_md.exists():
         try:
-            with open(gemini_md, "r", encoding="utf-8") as f:
+            with open(gemini_md, encoding="utf-8") as f:
                 content = f.read()
             if instruction not in content:
                 with open(gemini_md, "a", encoding="utf-8") as f:
@@ -159,7 +155,7 @@ def register():
         content = {}
         if path.exists():
             try:
-                with open(path, "r", encoding="utf-8") as f:
+                with open(path, encoding="utf-8") as f:
                     content = json.load(f)
             except Exception as e:
                 print(f"[WARNING] Could not read {path}: {e}")

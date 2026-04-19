@@ -1,1 +1,2 @@
-def validate(s): return len(s) > 0
+def validate(s):
+    return len(s) > 0

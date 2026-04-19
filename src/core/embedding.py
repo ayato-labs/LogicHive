@@ -49,9 +49,7 @@ class GeminiEmbeddingService:
                 model=self.model_name,
                 contents=text,
                 config={
-                    "task_type": "RETRIEVAL_QUERY"
-                    if is_query
-                    else "RETRIEVAL_DOCUMENT",
+                    "task_type": "RETRIEVAL_QUERY" if is_query else "RETRIEVAL_DOCUMENT",
                     "output_dimensionality": 768,
                 },
             )

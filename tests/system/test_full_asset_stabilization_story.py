@@ -53,7 +53,7 @@ test_factorial()
         description=draft["description"],
         tags=draft.get("tags", []),
         test_code=test_code,
-        project=project
+        project=project,
     )
     assert save_success
 

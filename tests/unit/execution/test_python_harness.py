@@ -10,6 +10,7 @@ from core.execution.python import EphemeralPythonExecutor
 def executor():
     return EphemeralPythonExecutor()
 
+
 @pytest.mark.asyncio
 async def test_sandbox_network_blocking(executor):
     """
@@ -30,12 +31,14 @@ def check_leak():
     assert result.status == ExecutionStatus.FAILURE
     assert "NETWORK_ACCESS_DENIED" in result.error.value
 
+
 @pytest.mark.asyncio
 async def test_offline_mode_enforcement(executor, monkeypatch):
     """
     Verifies that the executor adds the --offline flag to uv run.
     """
     from unittest.mock import AsyncMock
+
     captured_cmds = []
 
     async def mock_create_subprocess_exec(*args, **kwargs):
@@ -54,6 +57,7 @@ async def test_offline_mode_enforcement(executor, monkeypatch):
     args = captured_cmds[0]
     assert "--offline" in args
     assert "--no-project" in args
+
 
 @pytest.mark.asyncio
 async def test_execution_timeout_logic(executor):

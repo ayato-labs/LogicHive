@@ -6,7 +6,9 @@ import pytest
 # Set environment variables for testing BEFORE any imports
 os.environ["SQLITE_DB_PATH"] = os.path.join("storage", "data", "test", "test_logichive.db")
 os.environ["FAISS_INDEX_PATH"] = os.path.join("storage", "data", "test", "test_faiss_index.bin")
-os.environ["FAISS_MAPPING_PATH"] = os.path.join("storage", "data", "test", "test_faiss_mapping.json")
+os.environ["FAISS_MAPPING_PATH"] = os.path.join(
+    "storage", "data", "test", "test_faiss_mapping.json"
+)
 
 # Add src to sys.path
 import sys
@@ -21,12 +23,14 @@ class FakeLogicIntelligence:
     A deterministic fake for LogicIntelligence that avoids MagicMock.
     Returns stable results for testing without external API calls.
     """
+
     def __init__(self, api_key="fake_key"):
         self.api_key = api_key
 
     async def generate_embedding(self, text: str):
         # Deterministic dummy embedding: repeating a simple hash of the text
         import hashlib
+
         h = int(hashlib.md5(text.encode()).hexdigest(), 16)
         val = (h % 1000) / 1000.0
         return [val] * 768
@@ -56,17 +60,20 @@ class FakeLogicIntelligence:
         Uses keywords in prompt to trigger specific deterministic behaviors.
         """
         p_lower = prompt.lower()
-        
+
         # Security/Vulnerability Triggers
         if "eval" in p_lower or "exec" in p_lower:
             return {"score": 0, "reason": "Fake: AI Auditor detected code injection risk."}
         if "secret_key" in p_lower or "api_key" in p_lower:
             return {"score": 20, "reason": "Fake: AI Auditor detected hardcoded credentials."}
-        
+
         # Sophistry/Quality Theater Triggers
         if "pass" in p_lower and len(p_lower) < 50:
-            return {"score": 10, "reason": "Fake: AI Auditor detected empty or stub implementation."}
-        
+            return {
+                "score": 10,
+                "reason": "Fake: AI Auditor detected empty or stub implementation.",
+            }
+
         # Error/Edge case triggers
         if "break" in p_lower:
             return None
@@ -77,19 +84,23 @@ class FakeLogicIntelligence:
         if use_json:
             return {
                 "name": "fake_func",
-                "code": "def fake_func():\n    \"\"\"Docstring.\"\"\"\n    return True",
+                "code": 'def fake_func():\n    """Docstring."""\n    return True',
                 "description": "A high-quality fake function generated for testing",
                 "tags": ["fake", "unit-test"],
                 "dependencies": [],
                 "score": 98,
-                "reason": "Fake: Verified production-grade logic."
+                "reason": "Fake: Verified production-grade logic.",
             }
         return "TECHNICAL_QUERY_EXPANSION"
 
 
 def pytest_configure(config):
     """Register custom markers."""
-    config.addinivalue_line("markers", "use_real_intelligence: marker to skip the automatic patching of LogicIntelligence with FakeLogicIntelligence")
+    config.addinivalue_line(
+        "markers",
+        "use_real_intelligence: marker to skip the automatic patching of LogicIntelligence with FakeLogicIntelligence",
+    )
+
 
 @pytest.fixture(autouse=True)
 def intelligence_isolation(request):
@@ -136,14 +147,17 @@ def mock_intel():
     mock = MagicMock()
     mock.generate_embedding = AsyncMock(return_value=[0.1] * 768)
     mock.evaluate_quality = AsyncMock(return_value={"score": 85, "reason": "Mocked pass"})
-    mock.optimize_metadata = AsyncMock(return_value={"description": "Optimized description", "tags": ["ai-tag"]})
+    mock.optimize_metadata = AsyncMock(
+        return_value={"description": "Optimized description", "tags": ["ai-tag"]}
+    )
     return mock
 
 
 @pytest.fixture
 async def test_db():
-    from storage.init_db import init_db
     from core.db import close_db_connection
+    from storage.init_db import init_db
+
     # Ensure any previous connection is closed/reset before initializing
     await close_db_connection()
     await init_db()
@@ -171,11 +185,16 @@ async def clear_cache():
     vector_manager._initialized = True
 
     # Also remove physical index files if they exist to prevent cross-contamination
-    for f in [os.environ.get("FAISS_INDEX_PATH"), os.environ.get("FAISS_MAPPING_PATH"), os.environ.get("SQLITE_DB_PATH")]:
+    for f in [
+        os.environ.get("FAISS_INDEX_PATH"),
+        os.environ.get("FAISS_MAPPING_PATH"),
+        os.environ.get("SQLITE_DB_PATH"),
+    ]:
         if f and os.path.exists(f):
             try:
                 # On Windows, we might need multiple attempts if the file is being closed
                 import time
+
                 for _ in range(3):
                     try:
                         os.remove(f)

@@ -1,1 +1,2 @@
-def log(msg): print(f'[LOG] {msg}')
+def log(msg):
+    print(f"[LOG] {msg}")

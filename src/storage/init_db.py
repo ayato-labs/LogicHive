@@ -64,9 +64,7 @@ async def init_db():
     await db.execute(
         "CREATE INDEX IF NOT EXISTS idx_func_project_name ON logichive_functions(project, name);"
     )
-    await db.execute(
-        "CREATE INDEX IF NOT EXISTS idx_func_hash ON logichive_functions(code_hash);"
-    )
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_func_hash ON logichive_functions(code_hash);")
     await db.execute(
         "CREATE INDEX IF NOT EXISTS idx_hist_name ON logichive_function_history(name);"
     )

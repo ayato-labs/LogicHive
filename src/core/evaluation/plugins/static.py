@@ -5,8 +5,8 @@ import logging
 import os
 import subprocess
 import tempfile
-
 from pathlib import Path
+
 from ..base import BaseEvaluator, EvaluationResult
 
 logger = logging.getLogger(__name__)
@@ -73,9 +73,7 @@ class PythonStaticEvaluator(BaseEvaluator):
                         reasons.append("Relative import detected.")
 
             # Additional heuristic: check for too many functions in one asset
-            func_count = sum(
-                1 for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
-            )
+            func_count = sum(1 for node in ast.walk(tree) if isinstance(node, ast.FunctionDef))
             if func_count > 1:
                 score -= 10
                 reasons.append(f"Contains {func_count} functions (Atomicity risk).")
@@ -102,11 +100,12 @@ class RuffEvaluator(BaseEvaluator):
 
         try:
             import shutil
+
             from core.config import PROJECT_ROOT
-            
+
             # 1. Search for ruff in PATH
             ruff_cmd = shutil.which("ruff")
-            
+
             # 2. Fallback to local .venv (common in this repository's setup)
             if not ruff_cmd:
                 venv_ruff = Path(PROJECT_ROOT) / ".venv" / "Scripts" / "ruff.exe"
@@ -115,13 +114,14 @@ class RuffEvaluator(BaseEvaluator):
                 else:
                     # Final fallback to see if it's in the same directory as python
                     import sys
+
                     python_dir = Path(sys.executable).parent
                     alt_ruff = python_dir / ("ruff.exe" if os.name == "nt" else "ruff")
                     if alt_ruff.exists():
                         ruff_cmd = str(alt_ruff)
                     else:
-                        ruff_cmd = "ruff" # Last resort
-            
+                        ruff_cmd = "ruff"  # Last resort
+
             # Use subprocess to run ruff check on stdin
             process = await asyncio.create_subprocess_exec(
                 ruff_cmd,
@@ -139,9 +139,7 @@ class RuffEvaluator(BaseEvaluator):
                 # Check if ruff is installed/callable
                 error_msg = stderr.decode().strip() or stdout.decode().strip()
                 logger.warning(f"Ruff execution failed or not found: {error_msg}")
-                return EvaluationResult(
-                    score=100.0, reason="Ruff not available, skipped."
-                )
+                return EvaluationResult(score=100.0, reason="Ruff not available, skipped.")
 
             issues = json.loads(stdout.decode())
             if not issues:
@@ -150,9 +148,9 @@ class RuffEvaluator(BaseEvaluator):
             # Scoring logic: Deduct points for each issue
             score = 100.0
             issue_summaries = []
-            
+
             # Group by code to avoid repetitiveness
-            for issue in issues[:5]: # Cap feedback to avoid token bloat
+            for issue in issues[:5]:  # Cap feedback to avoid token bloat
                 code = issue.get("code", "UNK")
                 msg = issue.get("message", "No message")
                 line = issue.get("location", {}).get("row", "?")
@@ -160,11 +158,11 @@ class RuffEvaluator(BaseEvaluator):
 
             score -= len(issues) * 2.0
             score = max(0.0, score)
-            
+
             summary_text = " | ".join(issue_summaries)
             if len(issues) > 5:
                 summary_text += f" ...and {len(issues) - 5} more issues."
-                
+
             return EvaluationResult(
                 score=score,
                 reason=f"Ruff: Found {len(issues)} issues. {summary_text}",

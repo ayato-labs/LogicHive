@@ -7,9 +7,7 @@ LOGICHIVE_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "
 sys.path.append(os.path.join(LOGICHIVE_ROOT, "src"))
 
 # Force absolute paths for this execution
-os.environ["SQLITE_DB_PATH"] = os.path.join(
-    LOGICHIVE_ROOT, "storage", "data", "logichive.db"
-)
+os.environ["SQLITE_DB_PATH"] = os.path.join(LOGICHIVE_ROOT, "storage", "data", "logichive.db")
 os.environ["FS_DATA_DIR"] = os.path.join(LOGICHIVE_ROOT, "storage", "data")
 
 import orchestrator  # noqa: E402
@@ -36,7 +34,7 @@ def infer_path_from_content(content: str) -> str | None:
     Looks for patterns like '# filename: path/to/file.py' or '# path: file.py'.
     \"\"\"
     match = re.search(
-        r"^#\s*(?:filename|file|path):\s*([a-zA-Z0-9_./-]+)",
+        r"^#\\s*(?:filename|file|path):\\s*([a-zA-Z0-9_./-]+)",
         content,
         re.MULTILINE,
     )

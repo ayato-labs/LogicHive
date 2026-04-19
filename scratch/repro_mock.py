@@ -1,14 +1,14 @@
 import sys
-import json
 from unittest.mock import MagicMock
 
+
 def apply_mocks(mock_list):
-    from unittest.mock import MagicMock
     for mod_name in mock_list:
         m = MagicMock()
         # Explicitly set some common attributes to be safe
         m.__version__ = "mock-1.0.0"
         sys.modules[mod_name] = m
+
 
 code = """
 import torch

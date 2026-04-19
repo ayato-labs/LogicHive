@@ -25,7 +25,20 @@ def extract_python_dependencies(code: str) -> List[str]:
         # In personal mode, we might want to proceed but log the failure clearly.
         # However, per improvement plan, we should handle this more strictly.
         raise LogicHiveError(f"Critical failure during dependency extraction: {e}")
-    
+
     # Filter out common standard libraries to keep the 'recipe' focused on external deps
-    std_lib = {"os", "sys", "json", "math", "datetime", "typing", "asyncio", "logging", "ast", "pathlib", "uuid", "abc"}
+    std_lib = {
+        "os",
+        "sys",
+        "json",
+        "math",
+        "datetime",
+        "typing",
+        "asyncio",
+        "logging",
+        "ast",
+        "pathlib",
+        "uuid",
+        "abc",
+    }
     return sorted(list(dependencies - std_lib))

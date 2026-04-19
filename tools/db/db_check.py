@@ -1,5 +1,5 @@
-import sqlite3
 import os
+import sqlite3
 
 db_paths = [
     r"C:\Users\saiha\My_Service\programing\MCP\LogicHive\logichive.db",

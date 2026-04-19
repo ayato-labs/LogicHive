@@ -1,6 +1,6 @@
-import sqlite3
-import os
 import logging
+import os
+import sqlite3
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

@@ -7,17 +7,26 @@ from storage.sqlite_api import SqliteStorage
 async def storage(test_db):
     return SqliteStorage()
 
+
 @pytest.mark.asyncio
 async def test_get_functions_filtering(storage):
     """Tests project and tag filtering in get_functions."""
     # Setup: Insert test data
     f1 = {
-        "name": "func1", "project": "projA", "code": "pass",
-        "tags": ["tag1", "common"], "language": "python", "code_hash": "h1"
+        "name": "func1",
+        "project": "projA",
+        "code": "pass",
+        "tags": ["tag1", "common"],
+        "language": "python",
+        "code_hash": "h1",
     }
     f2 = {
-        "name": "func2", "project": "projB", "code": "pass",
-        "tags": ["tag2", "common"], "language": "python", "code_hash": "h2"
+        "name": "func2",
+        "project": "projB",
+        "code": "pass",
+        "tags": ["tag2", "common"],
+        "language": "python",
+        "code_hash": "h2",
     }
 
     await storage.upsert_function(f1)
@@ -41,20 +50,17 @@ async def test_get_functions_filtering(storage):
     results_none = await storage.get_functions(project="projX")
     assert len(results_none) == 0
 
+
 @pytest.mark.asyncio
 async def test_process_row_resilience(storage):
     """Tests that _process_row handles malformed or missing JSON gracefully."""
     # Case 1: Normal processing
-    row = {
-        "name": "test", "tags": '["a", "b"]', "project": "default"
-    }
+    row = {"name": "test", "tags": '["a", "b"]', "project": "default"}
     processed = storage._process_row(row)
     assert processed["tags"] == ["a", "b"]
 
     # Case 2: Malformed JSON
-    row_bad = {
-        "name": "test", "tags": '["unclosed', "project": "default"
-    }
+    row_bad = {"name": "test", "tags": '["unclosed', "project": "default"}
     processed_bad = storage._process_row(row_bad)
     # _process_row uses _safe_json_loads which returns raw on fail
     assert processed_bad["tags"] == '["unclosed'
@@ -63,6 +69,7 @@ async def test_process_row_resilience(storage):
     row_no_proj = {"name": "test", "project": None}
     processed_no_proj = storage._process_row(row_no_proj)
     assert processed_no_proj["project"] == "default"
+
 
 @pytest.mark.asyncio
 async def test_delete_function_storage(storage):

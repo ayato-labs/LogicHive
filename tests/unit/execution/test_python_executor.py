@@ -17,6 +17,7 @@ async def test_python_executor_success():
     assert "Tests Passed" in result.results[0].data
     assert result.duration > 0
 
+
 @pytest.mark.asyncio
 async def test_python_executor_failure():
     """Verifies that failing assertions are captured as FAILURE."""
@@ -30,6 +31,7 @@ async def test_python_executor_failure():
     assert result.error is not None
     assert "AssertionError" in result.error.name
 
+
 @pytest.mark.asyncio
 async def test_python_executor_timeout():
     """Verifies that infinite loops are killed by the timeout."""
@@ -41,6 +43,7 @@ async def test_python_executor_timeout():
 
     assert result.status == ExecutionStatus.TIMEOUT
     # Note: stderr might be empty if killed forcefully on Windows
+
 
 @pytest.mark.asyncio
 async def test_python_executor_with_dependencies():
@@ -56,11 +59,12 @@ async def test_python_executor_with_dependencies():
     assert result.status == ExecutionStatus.SUCCESS
     assert "Tests Passed" in result.results[0].data
 
+
 @pytest.mark.asyncio
 async def test_python_executor_syntax_error():
     """Verifies that syntax errors in the user code are captured."""
     executor = EphemeralPythonExecutor()
-    code = "def broken_syntax(:" # Missing paren
+    code = "def broken_syntax(:"  # Missing paren
 
     result = await executor.execute(code)
 

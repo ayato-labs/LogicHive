@@ -1,8 +1,11 @@
-import pytest
 import os
 import tempfile
 from pathlib import Path
+
+import pytest
+
 from core.evaluation.plugins.dependency_vouch import DependencyVouchEvaluator
+
 
 @pytest.mark.asyncio
 async def test_dependency_stdlib_allowed():
@@ -12,6 +15,7 @@ async def test_dependency_stdlib_allowed():
     code = "import os\nimport sys\nimport random\nimport enum\nfrom typing import List"
     result = await evaluator.evaluate(code, "python")
     assert result.score == 100.0
+
 
 @pytest.mark.asyncio
 async def test_dependency_hallucination_blocked():
@@ -28,6 +32,7 @@ async def test_dependency_hallucination_blocked():
         finally:
             os.chdir(old_cwd)
 
+
 @pytest.mark.asyncio
 async def test_dependency_declared_allowed():
     """Unit: Libraries declared in requirements.txt should be allowed."""
@@ -38,13 +43,14 @@ async def test_dependency_declared_allowed():
         try:
             with open("requirements.txt", "w") as f:
                 f.write("requests==2.25.1\npandas>=1.2.0")
-            
+
             # Re-instantiate to pick up new requirements.txt
             evaluator = DependencyVouchEvaluator()
             result = await evaluator.evaluate(code, "python")
             assert result.score == 100.0
         finally:
             os.chdir(old_cwd)
+
 
 @pytest.mark.asyncio
 async def test_dependency_local_module_allowed():
@@ -56,7 +62,7 @@ async def test_dependency_local_module_allowed():
         try:
             # Create a dummy local module
             Path("my_local_tool.py").touch()
-            
+
             evaluator = DependencyVouchEvaluator()
             result = await evaluator.evaluate(code, "python")
             assert result.score == 100.0

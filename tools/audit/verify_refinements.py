@@ -1,12 +1,12 @@
 import asyncio
-import sys
 import os
+import sys
 
 # Add src to path
 sys.path.append(os.path.abspath("src"))
 
-from orchestrator import do_save_async
 from core.exceptions import ValidationError
+from orchestrator import do_save_async
 from storage.sqlite_api import vector_manager
 
 
@@ -14,9 +14,7 @@ async def test_python_quality():
     print("--- Testing Python Quality Gate ---")
     bad_python = "def fail():\n  pass"  # Too trivial
     try:
-        await do_save_async(
-            "fail_func", bad_python, "Trivial function", language="python"
-        )
+        await do_save_async("fail_func", bad_python, "Trivial function", language="python")
         print("❌ Error: Trivial Python function should have been rejected.")
     except ValidationError:
         print("✅ Correctly rejected trivial Python.")
@@ -32,9 +30,7 @@ def calculate_fibonacci(n: int) -> int:
     return b
 """
     try:
-        success = await do_save_async(
-            "fib_func", good_python, "Calculates fib", language="python"
-        )
+        success = await do_save_async("fib_func", good_python, "Calculates fib", language="python")
         if success:
             print("✅ Successfully saved high-quality Python function.")
         else:

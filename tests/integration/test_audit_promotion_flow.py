@@ -30,7 +30,7 @@ async def test_draft_to_verified_integration_flow(test_db):
         code=code,
         description="[AI-DRAFT] Initial draft for integration test",
         test_code=test_code,
-        project=project
+        project=project,
     )
 
     # Confirm it is saved as draft
@@ -48,6 +48,7 @@ async def test_draft_to_verified_integration_flow(test_db):
     assert "[AI-DRAFT]" not in final["description"]
     assert final["reliability_score"] == 1.0
 
+
 @pytest.mark.asyncio
 async def test_failed_audit_integration_flow(test_db):
     """
@@ -59,14 +60,14 @@ async def test_failed_audit_integration_flow(test_db):
     project = "fail_test_project"
     name = "fail_integration_func"
     code = "def broken_func(): return False"
-    test_code = "assert broken_func() == True" # Will fail
+    test_code = "assert broken_func() == True"  # Will fail
 
     await do_save_async(
         name=name,
         code=code,
         description="[AI-DRAFT] This will fail audit",
         test_code=test_code,
-        project=project
+        project=project,
     )
 
     await stabilize_vault(dry_run=False, project=project)

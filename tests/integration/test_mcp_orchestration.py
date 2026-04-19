@@ -21,7 +21,7 @@ async def test_upsert_function_integration_flow(test_db):
         code=code,
         project=project,
         language="python",
-        test_code="assert add_numbers(1, 2) == 3"
+        test_code="assert add_numbers(1, 2) == 3",
     )
 
     # Note: Result is the save_result (True/False or maybe the added data)
@@ -35,13 +35,10 @@ async def test_upsert_function_integration_flow(test_db):
     assert found["reliability_score"] >= 0.7
 
     # 3. Check vector discovery
-    search_results = await do_search_async(
-        query="test query",
-        project=project,
-        limit=5
-    )
+    search_results = await do_search_async(query="test query", project=project, limit=5)
     assert len(search_results) > 0
     assert search_results[0]["name"] == name
+
 
 @pytest.mark.asyncio
 async def test_upsert_function_quality_gate_rejection_flow(test_db):
@@ -52,11 +49,8 @@ async def test_upsert_function_quality_gate_rejection_flow(test_db):
     bad_code = "def error_func(): pass"
 
     from core.exceptions import ValidationError
+
     with pytest.raises(ValidationError) as excinfo:
-        await do_save_async(
-            name="bad_func",
-            code=bad_code,
-            project="rejection_test"
-        )
+        await do_save_async(name="bad_func", code=bad_code, project="rejection_test")
 
     assert "Quality Gate rejected" in str(excinfo.value)

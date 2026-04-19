@@ -17,9 +17,7 @@ class AIGateEvaluator(BaseEvaluator):
     def name(self) -> str:
         return "ai_gate"
 
-    def __init__(
-        self, api_key: str = GEMINI_API_KEY, intel: LogicIntelligence | None = None
-    ):
+    def __init__(self, api_key: str = GEMINI_API_KEY, intel: LogicIntelligence | None = None):
         self.intel = intel or LogicIntelligence(api_key)
 
     async def evaluate(self, code: str, language: str, **kwargs) -> EvaluationResult:

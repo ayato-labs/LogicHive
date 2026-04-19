@@ -13,6 +13,7 @@ def eval_manager(fake_intel):
         ai_gate.intel = fake_intel
     return manager
 
+
 @pytest.mark.asyncio
 async def test_runtime_gate_blocks_save(eval_manager):
     """Verifies that the Quality Gate as a whole fails if runtime tests fail."""
@@ -20,15 +21,12 @@ async def test_runtime_gate_blocks_save(eval_manager):
     # Provide a test that will fail (DivisionByZero)
     test_code = "assert divide(10, 0) == 5"
 
-    result = await eval_manager.evaluate_all(
-        code=code,
-        language="python",
-        test_code=test_code
-    )
+    result = await eval_manager.evaluate_all(code=code, language="python", test_code=test_code)
 
     assert result["score"] == 0.0
     assert "Critical Logic Failure" in result["reason"]
     assert "ZeroDivisionError" in result["reason"]
+
 
 @pytest.mark.asyncio
 async def test_runtime_gate_passes_success(eval_manager):
@@ -36,15 +34,12 @@ async def test_runtime_gate_passes_success(eval_manager):
     code = "def multiply(a, b): return a * b"
     test_code = "assert multiply(2, 5) == 10"
 
-    result = await eval_manager.evaluate_all(
-        code=code,
-        language="python",
-        test_code=test_code
-    )
+    result = await eval_manager.evaluate_all(code=code, language="python", test_code=test_code)
 
     # Even if AI/Static give high scores, the runtime must pass
     assert result["score"] > 0
     assert result["details"]["runtime"]["score"] == 100.0
+
 
 @pytest.mark.asyncio
 async def test_runtime_gate_timeout_blocks(eval_manager):
@@ -57,7 +52,7 @@ async def test_runtime_gate_timeout_blocks(eval_manager):
         code=code,
         language="python",
         test_code=test_code,
-        timeout=2 # Short timeout for test
+        timeout=2,  # Short timeout for test
     )
 
     assert result["score"] == 0.0

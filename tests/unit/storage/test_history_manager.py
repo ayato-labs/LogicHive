@@ -42,7 +42,7 @@ async def test_archive_version_preserves_project():
             "tags": "[]",
             "language": "python",
             "version": 1,
-            "code_hash": "abc"
+            "code_hash": "abc",
         }
 
         await manager.archive_version(db, existing_row)

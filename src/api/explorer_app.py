@@ -11,9 +11,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 from storage.sqlite_api import sqlite_storage  # noqa: E402
 
 # --- MINIMALIST DESIGN ---
-st.set_page_config(
-    page_title="LogicHive | Personal Logic Vault", layout="wide", page_icon="🛡️"
-)
+st.set_page_config(page_title="LogicHive | Personal Logic Vault", layout="wide", page_icon="🛡️")
 
 st.markdown(
     """
@@ -48,9 +46,7 @@ def main():
             c2.metric("Executions", df["call_count"].sum() if "call_count" in df else 0)
             c3.metric(
                 "Avg Reliability",
-                f"{df['reliability_score'].mean():.2f}"
-                if "reliability_score" in df
-                else "1.0",
+                f"{df['reliability_score'].mean():.2f}" if "reliability_score" in df else "1.0",
             )
 
             st.subheader("Asset Audit")

@@ -3,9 +3,7 @@ def verify_api_key(key: str):
     conn = duckdb.connect(str(API_KEYS_DB_PATH), read_only=True)
     try:
         # Table must already exist. If not, select will fail.
-        res = conn.execute(
-            "SELECT user_id FROM api_keys WHERE key = ?", [key]
-        ).fetchone()
+        res = conn.execute("SELECT user_id FROM api_keys WHERE key = ?", [key]).fetchone()
         if res:
             return True, res[0]
         return False, None

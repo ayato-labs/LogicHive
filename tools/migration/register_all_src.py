@@ -1,8 +1,8 @@
-import os
-import sys
 import ast
 import asyncio
 import logging
+import os
+import sys
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -11,21 +11,21 @@ logger = logging.getLogger(__name__)
 # Add src to path
 sys.path.append(os.path.abspath("src"))
 
-from storage.sqlite_api import sqlite_storage  # noqa: E402
-from core.consolidation import LogicIntelligence  # noqa: E402
 from core.config import GEMINI_API_KEY, GEMINI_MODEL  # noqa: E402
+from core.consolidation import LogicIntelligence  # noqa: E402
 from core.hash_utils import calculate_code_hash  # noqa: E402
+from storage.sqlite_api import sqlite_storage  # noqa: E402
 
 SYSTEM_ORG_ID = "00000000-0000-0000-0000-000000000000"
 
 
 def extract_functions_from_file(file_path):
-    with open(file_path, "r", encoding="utf-8") as f:
+    with open(file_path, encoding="utf-8") as f:
         tree = ast.parse(f.read())
 
     functions = []
     # Get all lines once
-    with open(file_path, "r", encoding="utf-8") as f:
+    with open(file_path, encoding="utf-8") as f:
         code_lines = f.readlines()
 
     for node in ast.walk(tree):
@@ -49,9 +49,7 @@ def extract_functions_from_file(file_path):
 
 
 async def main():
-    logger.info(
-        f"Scanning src/core and src/storage for functions using model {GEMINI_MODEL}..."
-    )
+    logger.info(f"Scanning src/core and src/storage for functions using model {GEMINI_MODEL}...")
     target_dirs = ["src/core", "src/storage"]
     if not GEMINI_API_KEY:
         logger.error("GEMINI_API_KEY missing.")
@@ -94,17 +92,13 @@ async def main():
 
                             logger.info(f"  -> Generating technical spec for {name}...")
                             # 3. Generate rich metadata
-                            optimized = await intel.optimize_metadata(
-                                code, f_data["description"]
-                            )
+                            optimized = await intel.optimize_metadata(code, f_data["description"])
 
                             desc = optimized["description"]
                             tags = optimized["tags"]
 
                             # 4. Build RAG doc for embedding
-                            search_doc = intel.construct_search_document(
-                                name, desc, tags, code
-                            )
+                            search_doc = intel.construct_search_document(name, desc, tags, code)
 
                             # 5. Generate embedding
                             emb = await intel.generate_embedding(search_doc)

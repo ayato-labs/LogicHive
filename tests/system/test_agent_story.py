@@ -27,7 +27,7 @@ async def test_agent_discovery_to_execution_story(test_db, fake_intel):
 assert greet('World') == 'Hello, World!'
 assert greet('AI') == 'Hello, AI!'
 assert greet('') == 'Hello, !'
-"""
+""",
     )
     assert "Saved successfully" in res1
 
@@ -53,7 +53,7 @@ assert greet('') == 'Hi, !'
         code=updated_code,
         description="Updated greeting utility with tests",
         project=project,
-        test_code=test_code
+        test_code=test_code,
     )
     assert "Saved successfully" in res2
 

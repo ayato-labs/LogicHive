@@ -14,9 +14,7 @@ def build():
     try:
         # Run PyInstaller using the spec file
         subprocess.run(["pyinstaller", "--noconfirm", "LogicHive.spec"], check=True)
-        print(
-            "\n[SUCCESS] Build complete! You can find the executable in the 'dist' folder."
-        )
+        print("\n[SUCCESS] Build complete! You can find the executable in the 'dist' folder.")
 
         # Move to a 'release' folder for distribution if needed
         # (For now, let's just keep it in dist/ for simplicity as per MVP)

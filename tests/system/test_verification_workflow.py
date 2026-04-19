@@ -18,7 +18,7 @@ async def test_system_save_and_verify_success(test_db):
         code=code,
         test_code=test_code,
         description="System verification test",
-        tags=["system-test"]
+        tags=["system-test"],
     )
 
     # Check result (do_save_async returns True on success)
@@ -28,6 +28,7 @@ async def test_system_save_and_verify_success(test_db):
     stored = await do_get_async(name)
     assert stored is not None
     assert stored["code"] == code
+
 
 @pytest.mark.asyncio
 async def test_system_save_and_verify_failure(test_db):
@@ -43,10 +44,7 @@ async def test_system_save_and_verify_failure(test_db):
 
     with pytest.raises(ValidationError) as exc_info:
         await do_save_async(
-            name=name,
-            code=code,
-            description="This should fail",
-            test_code=test_code
+            name=name, code=code, description="This should fail", test_code=test_code
         )
 
     assert "Quality Gate rejected" in str(exc_info.value)
@@ -54,6 +52,7 @@ async def test_system_save_and_verify_failure(test_db):
     # Check DB (Should NOT exist)
     stored = await do_get_async(name)
     assert stored is None
+
 
 @pytest.mark.asyncio
 async def test_system_dependency_verification(test_db):
@@ -70,7 +69,7 @@ async def test_system_dependency_verification(test_db):
         code=code,
         description="Testing uv run with dependencies",
         test_code=test_code,
-        dependencies=["python-dateutil"]
+        dependencies=["python-dateutil"],
     )
 
     assert result is True

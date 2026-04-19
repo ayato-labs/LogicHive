@@ -1,12 +1,13 @@
 import asyncio
-import sys
 import os
+import sys
 
 # Ensure src is in the path
 sys.path.append(os.path.join(os.getcwd(), "src"))
 
-from orchestrator import do_save_async
 from core.exceptions import ValidationError
+from orchestrator import do_save_async
+
 
 async def run_dogfood():
     code = """
@@ -47,7 +48,7 @@ assert calculate_code_hash("x=1") != calculate_code_hash("x=2")
 
 print("Hardened Dogfooding verification successful!")
 """
-    
+
     try:
         print("Starting Dogfooding Registration (Direct Script)...")
         success = await do_save_async(
@@ -58,7 +59,7 @@ print("Hardened Dogfooding verification successful!")
             tags=["security", "internal", "hardened"],
             project="logichive-dogfood",
             test_code=test_code,
-            dependencies=[]
+            dependencies=[],
         )
         print(f"Result: {'SUCCESS' if success else 'FAILURE'}")
     except ValidationError as e:
@@ -66,7 +67,9 @@ print("Hardened Dogfooding verification successful!")
     except Exception as e:
         print(f"Error: {e}")
         import traceback
+
         traceback.print_exc()
+
 
 if __name__ == "__main__":
     asyncio.run(run_dogfood())

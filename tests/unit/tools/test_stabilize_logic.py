@@ -18,15 +18,17 @@ async def test_stabilize_vault_promotion_logic(test_db):
 
     # 1. Create a successful draft
     name = "success_draft"
-    await sqlite_storage.upsert_function({
-        "name": name,
-        "project": "test_project",
-        "code": "def func(x): return x + 1",
-        "test_code": "assert func(1) == 2",
-        "description": "[AI-DRAFT] Will pass",
-        "language": "python",
-        "embedding": [0.1] * 768
-    })
+    await sqlite_storage.upsert_function(
+        {
+            "name": name,
+            "project": "test_project",
+            "code": "def func(x): return x + 1",
+            "test_code": "assert func(1) == 2",
+            "description": "[AI-DRAFT] Will pass",
+            "language": "python",
+            "embedding": [0.1] * 768,
+        }
+    )
 
     # 2. Run stabilization (Not dry-run)
     await stabilize_vault(dry_run=False, project="test_project")
@@ -37,6 +39,7 @@ async def test_stabilize_vault_promotion_logic(test_db):
     assert "[AI-DRAFT]" not in func["description"]
     assert func["reliability_score"] == 1.0
 
+
 @pytest.mark.asyncio
 async def test_stabilize_vault_failure_flagging(test_db):
     """
@@ -46,15 +49,17 @@ async def test_stabilize_vault_failure_flagging(test_db):
 
     # 1. Create a failing draft
     name = "fail_draft"
-    await sqlite_storage.upsert_function({
-        "name": name,
-        "project": "test_project",
-        "code": "def func(x): return x + 1",
-        "test_code": "assert func(1) == 99", # Will fail
-        "description": "[AI-DRAFT] Will fail",
-        "language": "python",
-        "embedding": [0.1] * 768
-    })
+    await sqlite_storage.upsert_function(
+        {
+            "name": name,
+            "project": "test_project",
+            "code": "def func(x): return x + 1",
+            "test_code": "assert func(1) == 99",  # Will fail
+            "description": "[AI-DRAFT] Will fail",
+            "language": "python",
+            "embedding": [0.1] * 768,
+        }
+    )
 
     # 2. Run stabilization
     await stabilize_vault(dry_run=False, project="test_project")
@@ -65,6 +70,7 @@ async def test_stabilize_vault_failure_flagging(test_db):
     assert "Validation Failed" in func["description"]
     assert func["reliability_score"] < 1.0
 
+
 @pytest.mark.asyncio
 async def test_stabilize_vault_skip_no_tests(test_db):
     """
@@ -74,15 +80,17 @@ async def test_stabilize_vault_skip_no_tests(test_db):
 
     # 1. Create a draft without tests
     name = "skip_draft"
-    await sqlite_storage.upsert_function({
-        "name": name,
-        "project": "test_project",
-        "code": "def func(): pass",
-        "test_code": "", # Empty
-        "description": "[AI-DRAFT] No tests",
-        "language": "python",
-        "embedding": [0.1] * 768
-    })
+    await sqlite_storage.upsert_function(
+        {
+            "name": name,
+            "project": "test_project",
+            "code": "def func(): pass",
+            "test_code": "",  # Empty
+            "description": "[AI-DRAFT] No tests",
+            "language": "python",
+            "embedding": [0.1] * 768,
+        }
+    )
 
     # 2. Run stabilization
     await stabilize_vault(dry_run=False, project="test_project")

@@ -1,16 +1,17 @@
 import asyncio
-import sys
 import os
+import sys
 
 # Add src to path
 sys.path.append(os.path.join(os.getcwd(), "src"))
 
-from core.execution.docker import DockerPythonExecutor
 from core.execution.base import ExecutionStatus
+from core.execution.docker import DockerPythonExecutor
+
 
 async def run_unit_tests():
     executor = DockerPythonExecutor(image="python:3.11-slim")
-    
+
     print("Starting LogicHive Docker Executor Unit Tests...\n")
 
     # Test 1: Simple Success
@@ -56,7 +57,7 @@ except Exception as e:
 
     # Test 4: Syntax Error
     print("--- Test 4: Syntax Error ---")
-    code = "def broken(a, b): return a +++ " # Syntax error
+    code = "def broken(a, b): return a +++ "  # Syntax error
     res = await executor.execute(code, "")
     print(f"Status: {res.status.value}")
     if res.error:
@@ -65,6 +66,7 @@ except Exception as e:
     print("OK\n")
 
     print("All Docker Unit Tests COMPLETED.")
+
 
 if __name__ == "__main__":
     asyncio.run(run_unit_tests())

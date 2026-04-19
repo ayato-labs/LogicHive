@@ -6,15 +6,13 @@ from pathlib import Path
 # Add src to sys.path to allow importing core components
 sys.path.append(str(Path(__file__).parent.parent.parent / "src"))
 
-from storage.sqlite_api import sqlite_storage
 from core.evaluation.plugins.runtime import RuntimeEvaluator
+from storage.sqlite_api import sqlite_storage
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("Stabilizer")
+
 
 async def stabilize_vault(dry_run: bool = True, project: str = "default"):
     print("\n" + "=" * 60)
@@ -24,7 +22,8 @@ async def stabilize_vault(dry_run: bool = True, project: str = "default"):
     # 1. Fetch functions to audit
     all_functions = await sqlite_storage.get_all_functions()
     drafts = [
-        f for f in all_functions 
+        f
+        for f in all_functions
         if f.get("project") == project and "[AI-DRAFT]" in (f.get("description") or "")
     ]
 
@@ -33,7 +32,7 @@ async def stabilize_vault(dry_run: bool = True, project: str = "default"):
         return
 
     logger.info(f"Found {len(drafts)} drafts to stabilize.")
-    
+
     evaluator = RuntimeEvaluator()
     promoted_count = 0
     failed_count = 0
@@ -52,40 +51,37 @@ async def stabilize_vault(dry_run: bool = True, project: str = "default"):
             continue
 
         logger.info(f"  [*] {name}: Verifying in sandbox...")
-        
+
         try:
             # We use the RuntimeEvaluator which uses the EphemeralPythonExecutor (Sandbox)
             result = await evaluator.evaluate(
-                code=code,
-                language=lang,
-                test_code=test_code,
-                dependencies=dependencies
+                code=code, language=lang, test_code=test_code, dependencies=dependencies
             )
 
             if result.score == 100.0:
                 logger.info(f"  [+] {name}: PASSED")
                 promoted_count += 1
-                
+
                 if not dry_run:
                     # Update DB
                     new_description = func["description"].replace("[AI-DRAFT]", "[VERIFIED]")
                     # Handle case where it was already [VERIFIED] but score was low (unlikely here)
                     if "[VERIFIED]" not in new_description:
                         new_description = f"[VERIFIED] {new_description}"
-                    
+
                     # Prepare update data
                     # We reuse upsert logic or do a targeted update
                     # For simplicity in this tool, we use upsert which handles FAISS too
                     update_data = func.copy()
                     update_data["description"] = new_description
                     update_data["reliability_score"] = 1.0
-                    
+
                     await sqlite_storage.upsert_function(update_data)
                     logger.info("      -> Promoted in database.")
             else:
                 logger.error(f"  [x] {name}: FAILED - {result.reason}")
                 failed_count += 1
-                
+
                 if not dry_run:
                     # Append error to description and lower reliability score
                     error_msg = f"\n(Validation Failed: {result.reason})"
@@ -108,13 +104,17 @@ async def stabilize_vault(dry_run: bool = True, project: str = "default"):
     print(f"  Skipped:  {skipped_count}")
     print("-" * 40 + "\n")
 
+
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser(description="LogicHive Vault Stabilizer")
-    parser.add_argument("--run", action="store_true", help="Actually update the database (default is dry-run)")
+    parser.add_argument(
+        "--run", action="store_true", help="Actually update the database (default is dry-run)"
+    )
     parser.add_argument("--project", default="default", help="Project namespace to audit")
-    
+
     args = parser.parse_args()
-    
+
     # Run the async loop
     asyncio.run(stabilize_vault(dry_run=not args.run, project=args.project))

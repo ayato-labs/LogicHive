@@ -7,6 +7,7 @@ from storage.sqlite_api import sqlite_storage
 async def storage(test_db):
     return sqlite_storage
 
+
 @pytest.mark.asyncio
 async def test_find_similar_functions_include_code_false(storage):
     """
@@ -20,7 +21,7 @@ async def test_find_similar_functions_include_code_false(storage):
         "language": "python",
         "project": "p1",
         "embedding": [0.1] * 768,
-        "code_hash": "hash1"
+        "code_hash": "hash1",
     }
     await storage.upsert_function(data)
 
@@ -34,6 +35,7 @@ async def test_find_similar_functions_include_code_false(storage):
     assert "code" not in results[0]
     assert results[0]["description"] == "desc"
 
+
 @pytest.mark.asyncio
 async def test_find_similar_functions_include_code_true(storage):
     """
@@ -46,7 +48,7 @@ async def test_find_similar_functions_include_code_true(storage):
         "language": "python",
         "project": "p1",
         "embedding": [0.1] * 768,
-        "code_hash": "hash2"
+        "code_hash": "hash2",
     }
     await storage.upsert_function(data)
 
@@ -59,6 +61,7 @@ async def test_find_similar_functions_include_code_true(storage):
     assert "code" in results[0]
     assert results[0]["code"] == "def my_code(): pass"
 
+
 @pytest.mark.asyncio
 async def test_process_row_logic(storage):
     """Verifies that _process_row correctly parses JSON fields."""
@@ -69,7 +72,7 @@ async def test_process_row_logic(storage):
         "tags": '["t1"]',
         "language": "python",
         "project": "p1",
-        "embedding": '[0.1, 0.2]'
+        "embedding": "[0.1, 0.2]",
     }
 
     processed = storage._process_row(row_data)

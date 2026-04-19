@@ -20,17 +20,14 @@ async def test_rigor_story_sophistry_rejection(test_db):
 
     with pytest.raises(ValidationError) as excinfo:
         await do_save_async(
-            name=name,
-            code=code,
-            description=description,
-            test_code=test_code,
-            language="python"
+            name=name, code=code, description=description, test_code=test_code, language="python"
         )
 
     assert "DETERMINISTIC REJECTION" in str(excinfo.value)
     # Verify it was NOT saved
     saved = await sqlite_storage.get_function_by_name(name)
     assert saved is None
+
 
 @pytest.mark.asyncio
 async def test_rigor_story_honest_promotion(test_db):
@@ -45,11 +42,7 @@ async def test_rigor_story_honest_promotion(test_db):
     description = "Adds two numbers."
 
     result = await do_save_async(
-        name=name,
-        code=code,
-        description=description,
-        test_code=test_code,
-        language="python"
+        name=name, code=code, description=description, test_code=test_code, language="python"
     )
 
     assert result is True
@@ -60,6 +53,7 @@ async def test_rigor_story_honest_promotion(test_db):
     # 90 (fake ai) * 0.2 + 100 (det) * 0.4 + ... -> should be > 0.5
     assert saved["reliability_score"] > 0.5
 
+
 @pytest.mark.asyncio
 async def test_rigor_story_draft_bypass(test_db):
     """
@@ -67,18 +61,14 @@ async def test_rigor_story_draft_bypass(test_db):
     Drafts are allowed to have low quality because they are explicitly marked.
     """
     name = "draft_func"
-    code = "def incomplete():" # Syntax error in real life, but here we test the gate
-    test_code = "" # No tests
+    code = "def incomplete():"  # Syntax error in real life, but here we test the gate
+    test_code = ""  # No tests
     description = "DRAFT: Prototype of something."
     code = "def incomplete_but_valid(): pass"
-    test_code = "" # No tests
+    test_code = ""  # No tests
 
     result = await do_save_async(
-        name=name,
-        code=code,
-        description=description,
-        test_code=test_code,
-        language="python"
+        name=name, code=code, description=description, test_code=test_code, language="python"
     )
 
     assert result is True

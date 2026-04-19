@@ -26,18 +26,14 @@ class StripeBilling:
 
     def __init__(self):
         if not stripe.api_key:
-            logger.warning(
-                "Stripe: API Key missing. Billing features will be disabled."
-            )
+            logger.warning("Stripe: API Key missing. Billing features will be disabled.")
 
     def create_customer(self, org_name: str, org_id: str) -> str | None:
         """
         Creates a Stripe customer for an organization.
         """
         try:
-            customer = stripe.Customer.create(
-                name=org_name, metadata={"org_id": org_id}
-            )
+            customer = stripe.Customer.create(name=org_name, metadata={"org_id": org_id})
             return customer.id
         except Exception as e:
             logger.error(f"Stripe: Failed to create customer: {e}")
@@ -89,9 +85,7 @@ class StripeBilling:
             logger.error(f"Stripe: Failed to create checkout session: {e}")
             return None
 
-    def verify_webhook_signature(
-        self, payload: str, sig_header: str, endpoint_secret: str
-    ):
+    def verify_webhook_signature(self, payload: str, sig_header: str, endpoint_secret: str):
         """
         Verifies the Stripe webhook signature.
         """

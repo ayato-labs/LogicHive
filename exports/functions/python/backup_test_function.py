@@ -1,1 +1,2 @@
-def backup_test(): return 'backup works'
+def backup_test():
+    return "backup works"

@@ -31,12 +31,14 @@ except Exception as e:
     assert "NETWORK_BLOCKED" in result.logs.stdout or result.status != ExecutionStatus.SUCCESS
     assert "NETWORK_ACCESSIBLE" not in result.logs.stdout
 
+
 @pytest.mark.asyncio
 async def test_sandbox_environment_leakage():
     """
     Verify that sensitive environment variables (like API keys) are NOT leaked to the sandbox.
     """
     import os
+
     os.environ["SECRET_TOKEN_LEAK"] = "PRIVATE_DATA"
 
     executor = ExecutorFactory.get_executor("python")

@@ -17,6 +17,7 @@ from datetime import datetime
     assert "numpy" in deps
     assert len(deps) == 2
 
+
 def test_extract_dependencies_js():
     code = """
 import { something } from 'lodash';
@@ -33,6 +34,7 @@ import '@types/node';
     assert "local" not in deps
     assert len(deps) == 3
 
+
 @pytest.mark.asyncio
 async def test_do_list_async_integration(test_db):
     """
@@ -40,7 +42,10 @@ async def test_do_list_async_integration(test_db):
     Since it doesn't call LLM, it's a pure unit/local-integration test.
     """
     from storage.sqlite_api import sqlite_storage
-    await sqlite_storage.upsert_function({"name": "list_me", "project": "list_proj", "code": "pass", "code_hash": "h"})
+
+    await sqlite_storage.upsert_function(
+        {"name": "list_me", "project": "list_proj", "code": "pass", "code_hash": "h"}
+    )
 
     results = await do_list_async(project="list_proj")
     assert len(results) == 1

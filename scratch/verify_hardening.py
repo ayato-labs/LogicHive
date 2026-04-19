@@ -1,15 +1,16 @@
 import asyncio
-import sys
 import os
+import sys
 
 # Add src to path
 sys.path.append(os.path.join(os.getcwd(), "src"))
 
 from core.evaluation.plugins.deterministic import DeterministicEvaluator
 
+
 async def test_rejection_logic():
     evaluator = DeterministicEvaluator()
-    
+
     # 1. Fake Assert Theater (Python)
     code = "def add(a, b): return a + b"
     fake_test = """
@@ -41,10 +42,13 @@ def test_add():
     # 3. Multi-language Support (JS)
     js_test = "expect(sum(1, 2)).toBe(3);"
     print("--- Testing 'JS Support' ---")
-    res = await evaluator.evaluate("function sum(a, b) { return a+b; }", "javascript", test_code=js_test)
+    res = await evaluator.evaluate(
+        "function sum(a, b) { return a+b; }", "javascript", test_code=js_test
+    )
     print(f"Score: {res.score}")
     print(f"Reason: {res.reason}")
     print(f"Assertion Count: {res.details['assertion_count']}")
+
 
 if __name__ == "__main__":
     asyncio.run(test_rejection_logic())

@@ -1,18 +1,18 @@
 import asyncio
-import os
-import json
 import logging
+
 from orchestrator import do_save_async
 
 # Configure logging to see the instrumentation
-logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+
 
 async def run_dogfooding():
     print("--- LogicHive Dogfooding Start ---")
-    
+
     name = "resilient_data_fetcher"
     description = "Advanced asynchronous fetcher with pydantic validation and exponential backoff."
-    
+
     code = """
 import asyncio
 import aiohttp
@@ -75,19 +75,20 @@ if __name__ == "__main__":
             description=description,
             test_code=test_code,
             dependencies=["pydantic", "aiohttp"],
-            timeout=45 # Custom timeout test
+            timeout=45,  # Custom timeout test
         )
-        
+
         if success:
             print("\n--- Dogfooding SUCCESS ---")
             print(f"Asset '{name}' approved and registered.")
-            # We don't have direct access to the duration here in return bool, 
+            # We don't have direct access to the duration here in return bool,
             # but we can see it in the console logs if logging is ON.
         else:
             print("\n--- Dogfooding REJECTED ---")
-            
+
     except Exception as e:
         print(f"\n--- Dogfooding ERROR ---\n{e}")
+
 
 if __name__ == "__main__":
     asyncio.run(run_dogfooding())

@@ -1,5 +1,5 @@
-import sqlite3
 import os
+import sqlite3
 
 db_path = "logichive.db"
 if not os.path.exists(db_path):
@@ -12,9 +12,7 @@ conn.row_factory = sqlite3.Row
 cursor = conn.cursor()
 
 try:
-    cursor.execute(
-        "SELECT name, description, reliability_score FROM logichive_functions"
-    )
+    cursor.execute("SELECT name, description, reliability_score FROM logichive_functions")
     rows = cursor.fetchall()
     print(f"Found {len(rows)} functions.")
     for row in rows:

@@ -13,24 +13,29 @@ from core.execution.python import EphemeralPythonExecutor
 def executor():
     return EphemeralPythonExecutor()
 
+
 @pytest.mark.asyncio
 async def test_kill_process_tree_unit(executor):
     """
-    Unit test for _kill_process_tree helper. 
+    Unit test for _kill_process_tree helper.
     Spawns a process with children and verifies they are all killed.
     """
     # Spawn a shell that spawns a sleep
     # In Windows: cmd /c "start /b timeout 100" or similar
     # For cross-platform test, we'll use a simple python sleeper
     proc = subprocess.Popen(
-        [sys.executable, "-c", "import time; import subprocess; subprocess.Popen(['python', '-c', 'import time; time.sleep(100)']); time.sleep(100)"],
+        [
+            sys.executable,
+            "-c",
+            "import time; import subprocess; subprocess.Popen(['python', '-c', 'import time; time.sleep(100)']); time.sleep(100)",
+        ],
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
+        stderr=subprocess.PIPE,
     )
 
     pid = proc.pid
     p = psutil.Process(pid)
-    await asyncio.sleep(0.5) # Wait for child to spawn
+    await asyncio.sleep(0.5)  # Wait for child to spawn
 
     children = p.children(recursive=True)
     assert len(children) >= 1
@@ -43,6 +48,7 @@ async def test_kill_process_tree_unit(executor):
     assert not p.is_running()
     for child in children:
         assert not child.is_running()
+
 
 @pytest.mark.asyncio
 async def test_memory_monitor_trigger(executor):
@@ -63,6 +69,7 @@ time.sleep(2) # Keep it alive long enough for monitor
     assert result.status == ExecutionStatus.MEMORY_LIMIT
     assert "Memory limit exceeded" in result.logs.stderr
 
+
 @pytest.mark.asyncio
 async def test_timeout_monitor_trigger(executor):
     """Verifies timeout triggers status."""
@@ -70,4 +77,3 @@ async def test_timeout_monitor_trigger(executor):
     result = await executor.execute(code, timeout=1)
 
     assert result.status == ExecutionStatus.TIMEOUT
-

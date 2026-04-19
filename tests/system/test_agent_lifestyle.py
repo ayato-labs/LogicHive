@@ -22,6 +22,7 @@ async def full_env(test_db, tmp_path):
 
     backup_manager.export_dir = original_export_dir
 
+
 @pytest.mark.asyncio
 async def test_full_agent_workflow(full_env):
     """
@@ -36,7 +37,7 @@ async def test_full_agent_workflow(full_env):
         code=code,
         description="Original logic",
         tags=["workflow"],
-        test_code="assert workflow_func() == 'original'"
+        test_code="assert workflow_func() == 'original'",
     )
 
     # Verify in DB

@@ -17,37 +17,39 @@ async def test_search_isolation_shadowing_prevention(test_db, fake_intel):
         desc = f"Generic Math version {i}"
         # Use fake_intel directly
         emb = await fake_intel.generate_embedding(desc)
-        await sqlite_storage.upsert_function({
-            "name": f"math_func_a_{i}",
-            "code": code,
-            "description": desc,
-            "language": "python",
-            "tags": ["math", "noise"],
-            "project": "ProjectA",
-            "embedding": emb,
-            "code_hash": f"hash_a_{i}"
-        })
+        await sqlite_storage.upsert_function(
+            {
+                "name": f"math_func_a_{i}",
+                "code": code,
+                "description": desc,
+                "language": "python",
+                "tags": ["math", "noise"],
+                "project": "ProjectA",
+                "embedding": emb,
+                "code_hash": f"hash_a_{i}",
+            }
+        )
 
     # 2. Setup Project B (Target)
     target_code = "def target_add(a, b): return a + b"
     target_desc = "Specific Math function for Project B"
     emb_target = await fake_intel.generate_embedding(target_desc)
-    await sqlite_storage.upsert_function({
-        "name": "math_func_b",
-        "code": target_code,
-        "description": target_desc,
-        "language": "python",
-        "tags": ["math", "target"],
-        "project": "ProjectB",
-        "embedding": emb_target,
-        "code_hash": "hash_b"
-    })
+    await sqlite_storage.upsert_function(
+        {
+            "name": "math_func_b",
+            "code": target_code,
+            "description": target_desc,
+            "language": "python",
+            "tags": ["math", "target"],
+            "project": "ProjectB",
+            "embedding": emb_target,
+            "code_hash": "hash_b",
+        }
+    )
 
     # 3. Search Project B
     results = await sqlite_storage.find_similar_functions(
-        embedding=emb_target,
-        project="ProjectB",
-        limit=5
+        embedding=emb_target, project="ProjectB", limit=5
     )
 
     # Check results

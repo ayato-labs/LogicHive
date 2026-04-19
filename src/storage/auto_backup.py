@@ -20,9 +20,7 @@ class AutoBackupManager:
     def __init__(self, base_dir: str = None):
         # Default to project root (assumed to be one level up from src)
         if base_dir is None:
-            base_dir = os.path.abspath(
-                os.path.join(os.path.dirname(__file__), "..", "..")
-            )
+            base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
         self.base_dir = base_dir
         self.export_dir = os.path.join(self.base_dir, "exports")
         self.repo_name = "logichive-vault-backup"
@@ -34,9 +32,7 @@ class AutoBackupManager:
         """
         if not GITHUB_TOKEN:
             if ENABLE_AUTO_BACKUP:
-                logger.debug(
-                    "AutoBackup: GITHUB_TOKEN is not set. Skipping remote sync."
-                )
+                logger.debug("AutoBackup: GITHUB_TOKEN is not set. Skipping remote sync.")
             return False
 
         try:
@@ -71,9 +67,7 @@ class AutoBackupManager:
 
                 if check_res.status_code == 404:
                     # 3. Create private repo
-                    logger.info(
-                        f"AutoBackup: Creating private repository '{self.repo_name}'..."
-                    )
+                    logger.info(f"AutoBackup: Creating private repository '{self.repo_name}'...")
                     create_res = await client.post(
                         "https://api.github.com/user/repos",
                         headers=headers,
@@ -84,13 +78,9 @@ class AutoBackupManager:
                         },
                     )
                     if create_res.status_code not in (201, 200):
-                        logger.error(
-                            f"AutoBackup: Repository creation failed: {create_res.text}"
-                        )
+                        logger.error(f"AutoBackup: Repository creation failed: {create_res.text}")
                         return False
-                    logger.info(
-                        f"AutoBackup: Successfully created '{self.repo_name}' on GitHub."
-                    )
+                    logger.info(f"AutoBackup: Successfully created '{self.repo_name}' on GitHub.")
 
                 # 4. Initialize local git if needed
                 if not os.path.exists(os.path.join(self.export_dir, ".git")):
@@ -105,9 +95,7 @@ class AutoBackupManager:
                         text=True,
                     )
                     if res_init.returncode != 0:
-                        logger.error(
-                            f"AutoBackup: 'git init' failed: {res_init.stderr}"
-                        )
+                        logger.error(f"AutoBackup: 'git init' failed: {res_init.stderr}")
                         return False
                     subprocess.run(
                         ["git", "branch", "-M", "main"],
@@ -144,9 +132,7 @@ class AutoBackupManager:
                     self._initialized_remote = True
                     return True
                 else:
-                    logger.error(
-                        f"AutoBackup: 'git remote add' failed: {res_remote.stderr}"
-                    )
+                    logger.error(f"AutoBackup: 'git remote add' failed: {res_remote.stderr}")
 
         except Exception as e:
             logger.error(f"AutoBackup: Unexpected error during initialization: {e}")
@@ -214,9 +200,7 @@ class AutoBackupManager:
 
             # Add all
             await (
-                await asyncio.create_subprocess_exec(
-                    "git", "add", ".", cwd=self.export_dir
-                )
+                await asyncio.create_subprocess_exec("git", "add", ".", cwd=self.export_dir)
             ).wait()
 
             # Commit
@@ -319,7 +303,9 @@ class AutoBackupManager:
 
                         assets.append(meta_data)
                     except Exception as e:
-                        logger.error(f"AutoBackup: Failed to read '{filename}' in project '{project}': {e}")
+                        logger.error(
+                            f"AutoBackup: Failed to read '{filename}' in project '{project}': {e}"
+                        )
 
         except Exception as e:
             logger.error(f"AutoBackup: Error listing backup assets: {e}")
@@ -381,9 +367,7 @@ class AutoBackupManager:
             # 3. Execute git commands WITHIN exports/
             # Step A: Add all changes in exports/
             await (
-                await asyncio.create_subprocess_exec(
-                    "git", "add", ".", cwd=self.export_dir
-                )
+                await asyncio.create_subprocess_exec("git", "add", ".", cwd=self.export_dir)
             ).wait()
 
             # Step B: Commit
@@ -448,14 +432,14 @@ class AutoBackupManager:
 
             # Check functions
             ext = self._get_extension(lang)
-            code_path = os.path.join(
-                project_dir, "functions", lang.lower(), f"{name}.{ext}"
-            )
+            code_path = os.path.join(project_dir, "functions", lang.lower(), f"{name}.{ext}")
             if os.path.exists(code_path):
                 found_files.append(code_path)
 
             if not found_files:
-                logger.info(f"AutoBackup: No files found to archive for '{name}' in project '{project}'.")
+                logger.info(
+                    f"AutoBackup: No files found to archive for '{name}' in project '{project}'."
+                )
                 return
 
             # 3. Move to archives directory (keeping project context)
@@ -471,9 +455,7 @@ class AutoBackupManager:
 
             # 4. Git sync
             await (
-                await asyncio.create_subprocess_exec(
-                    "git", "add", ".", cwd=self.export_dir
-                )
+                await asyncio.create_subprocess_exec("git", "add", ".", cwd=self.export_dir)
             ).wait()
             commit_proc = await asyncio.create_subprocess_exec(
                 "git",
@@ -505,7 +487,9 @@ class AutoBackupManager:
 
         try:
             await self.export_asset(data)
-            await self.sync_to_git(data.get("name", "asset"), project=data.get("project", "default"))
+            await self.sync_to_git(
+                data.get("name", "asset"), project=data.get("project", "default")
+            )
         except Exception as e:
             logger.error(f"AutoBackup: Background backup process failed: {e}")
 

@@ -9,16 +9,15 @@ async def test_generate_draft_logic(fake_intel):
     generator = DraftGenerator(fake_intel)
 
     query = "Search query"
-    context = [
-        {"name": "exist_1", "code": "def exist_1(): pass", "description": "existing"}
-    ]
+    context = [{"name": "exist_1", "code": "def exist_1(): pass", "description": "existing"}]
 
     res = await generator.generate_draft(query, context)
 
     assert res["is_draft"] is True
     assert "[AI-DRAFT]" in res["description"]
-    assert res["name"] == "fake_func" # From FakeLogicIntelligence
+    assert res["name"] == "fake_func"  # From FakeLogicIntelligence
     assert res["provenance"] == "LogicHive Auto-Draft"
+
 
 @pytest.mark.asyncio
 async def test_generate_draft_failure(fake_intel):
@@ -28,6 +27,7 @@ async def test_generate_draft_failure(fake_intel):
     res = await generator.generate_draft("fail", [])
     assert res == {}
 
+
 @pytest.mark.asyncio
 async def test_draft_generator_malformed_json(fake_intel):
     """Tests recovery from 'None' response (simulating malformed JSON)."""
@@ -36,11 +36,12 @@ async def test_draft_generator_malformed_json(fake_intel):
     res = await generator.generate_draft("break", [])
     assert res == {}
 
+
 @pytest.mark.asyncio
 async def test_draft_generator_missing_fields_recovery(fake_intel):
     """
     Tests recovery when AI omits some fields.
-    Note: Since FakeLogicIntelligence returns a complete dict, we verify 
+    Note: Since FakeLogicIntelligence returns a complete dict, we verify
     that the generator still adds its decorations.
     """
     generator = DraftGenerator(fake_intel)

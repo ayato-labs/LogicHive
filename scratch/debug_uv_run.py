@@ -15,7 +15,11 @@ with open("debug_hash.py", "w") as f:
     f.write(code)
 
 start = time.perf_counter()
-res = subprocess.run(["uv", "run", "--quiet", "--offline", "--no-project", "python", "debug_hash.py"], capture_output=True, text=True)
+res = subprocess.run(
+    ["uv", "run", "--quiet", "--offline", "--no-project", "python", "debug_hash.py"],
+    capture_output=True,
+    text=True,
+)
 end = time.perf_counter()
 
 print(f"Status: {res.returncode}")

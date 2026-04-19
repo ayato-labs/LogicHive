@@ -1,15 +1,16 @@
 import asyncio
 import logging
-import sys
 import os
+import sys
 
 # Add src to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
-from orchestrator import do_save_async
 from core.exceptions import ValidationError
+from orchestrator import do_save_async
 
 logging.basicConfig(level=logging.INFO)
+
 
 async def test_timeout_fix():
     code = """
@@ -30,7 +31,7 @@ assert slow_function() == "done"
             code=code,
             test_code=test_code,
             description="Testing short timeout",
-            timeout=2 # 2 seconds
+            timeout=2,  # 2 seconds
         )
         print("[FAIL] Error: Should have timed out but passed.")
     except ValidationError as e:
@@ -44,7 +45,7 @@ assert slow_function() == "done"
             code=code,
             test_code=test_code,
             description="[AI-DRAFT] Testing custom timeout",
-            timeout=10 # 10 seconds
+            timeout=10,  # 10 seconds
         )
         if success:
             print("[PASS] Successfully passed with custom timeout.")
@@ -62,14 +63,15 @@ assert slow_function() == "done"
             code=code,
             test_code=test_code,
             description="[AI-DRAFT] Testing hard limit",
-            timeout=150 # Exceeds 120s
+            timeout=150,  # Exceeds 120s
         )
         if success:
-             print("[PASS] Successfully passed (timeout was capped at 120s as expected).")
+            print("[PASS] Successfully passed (timeout was capped at 120s as expected).")
         else:
             print("[FAIL] Failed registration.")
     except Exception as e:
         print(f"[FAIL] Unexpected error: {e}")
+
 
 if __name__ == "__main__":
     asyncio.run(test_timeout_fix())

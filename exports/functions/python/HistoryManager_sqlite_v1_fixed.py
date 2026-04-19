@@ -4,6 +4,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+
 class HistoryManager:
     """
     Handles persistence of meeting history (transcripts, minutes, and audio paths).

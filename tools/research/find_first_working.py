@@ -5,6 +5,7 @@ import sys
 sys.path.append(os.path.abspath("src"))
 
 from google import genai
+
 from core.config import GEMINI_API_KEY
 
 

@@ -18,6 +18,7 @@ async def test_evaluation_manager_rejection(fake_intel):
     assert result["score"] == 0
     assert "structural error" in result["reason"].lower()
 
+
 @pytest.mark.asyncio
 async def test_evaluation_manager_deterministic_veto(fake_intel):
     """Verifies that DETERMINISTIC REJECTION (score=0) forces final score to 0."""
@@ -25,11 +26,12 @@ async def test_evaluation_manager_deterministic_veto(fake_intel):
 
     # Valid code BUT NO assertions in tests -> Deterministic score 0
     code = "def add(a, b): return a + b"
-    test_code = "add(1, 1)" # No assert
+    test_code = "add(1, 1)"  # No assert
 
     result = await manager.evaluate_all(code, "python", test_code=test_code)
     assert result["score"] == 0.0
     assert "DETERMINISTIC REJECTION" in result["reason"]
+
 
 @pytest.mark.asyncio
 async def test_weight_calculation_correctness(fake_intel):
@@ -56,6 +58,7 @@ async def test_weight_calculation_correctness(fake_intel):
     result = await manager.evaluate_all("def f(): pass", "python", is_draft=True)
     assert result["score"] == pytest.approx(92.0)
 
+
 @pytest.mark.asyncio
 async def test_ai_auditor_veto_theater(fake_intel):
     """Verifies that AI score < 30 (Quality Theater) triggers rejection."""
@@ -63,7 +66,9 @@ async def test_ai_auditor_veto_theater(fake_intel):
 
     for ev in manager.evaluators:
         if ev.name == "ai_gate":
-            ev.evaluate = AsyncMock(return_value=EvaluationResult(score=20.0, reason="Quality Theater Detected"))
+            ev.evaluate = AsyncMock(
+                return_value=EvaluationResult(score=20.0, reason="Quality Theater Detected")
+            )
         elif ev.name == "structural":
             ev.evaluate = AsyncMock(return_value=EvaluationResult(score=100.0, reason="Struct ok"))
         else:
@@ -72,6 +77,7 @@ async def test_ai_auditor_veto_theater(fake_intel):
     result = await manager.evaluate_all("def fake(): pass", "python", is_draft=True)
     assert result["score"] == 0.0
     assert "VETO" in result["reason"]
+
 
 @pytest.mark.asyncio
 async def test_ai_gate_evaluator_isolated(fake_intel):

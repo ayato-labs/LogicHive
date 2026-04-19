@@ -1,1 +1,2 @@
-def proj_b(): return 'B'
+def proj_b():
+    return "B"

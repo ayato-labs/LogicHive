@@ -23,6 +23,7 @@ async def sync_env(test_db, tmp_path):
     # Restore original path
     backup_manager.export_dir = original_export_dir
 
+
 @pytest.mark.asyncio
 async def test_sync_bidirectional_idempotency(sync_env, mock_intel):
     """
@@ -39,7 +40,7 @@ async def test_sync_bidirectional_idempotency(sync_env, mock_intel):
         "description": "Original",
         "tags": ["sync"],
         "language": "python",
-        "code_hash": "hash1"
+        "code_hash": "hash1",
     }
     await sqlite_storage.upsert_function(asset)
 
@@ -77,6 +78,7 @@ async def test_sync_bidirectional_idempotency(sync_env, mock_intel):
     # check description and tags preserved (metadata json check)
     assert "sync" in db_asset["tags"]
 
+
 @pytest.mark.asyncio
 async def test_sync_new_file_discovery(sync_env):
     """Verifies that a new file created in the mirror is picked up by the DB."""
@@ -90,6 +92,7 @@ async def test_sync_new_file_discovery(sync_env):
     (func_dir / "new_logic.py").write_text(code)
 
     import json
+
     meta = {"name": "new_logic", "description": "From external", "tags": ["external"]}
     (meta_dir / "new_logic.json").write_text(json.dumps(meta))
 

@@ -1,26 +1,26 @@
 import asyncio
+import json
 import logging
 import time
-import uuid
-import json
-from pathlib import Path
+
 from .base import (
-    BaseExecutor, 
-    ExecutionResult, 
-    ExecutionStatus, 
-    ExecutionLogs, 
-    ExecutionError, 
-    Result
+    BaseExecutor,
+    ExecutionError,
+    ExecutionLogs,
+    ExecutionResult,
+    ExecutionStatus,
+    Result,
 )
 
 logger = logging.getLogger(__name__)
+
 
 class DockerPythonExecutor(BaseExecutor):
     """
     Hardened Python Executor that runs code inside isolated Docker containers.
     Provides maximum security and resource isolation.
     """
-    
+
     def __init__(self, image: str = "python:3.11-slim"):
         self.image = image
         self.name = "python-docker"
@@ -31,22 +31,30 @@ class DockerPythonExecutor(BaseExecutor):
         test_code: str = "",
         dependencies: list[str] | None = None,
         timeout: int = 30,
-        **kwargs
+        **kwargs,
     ) -> ExecutionResult:
         start_time = time.time()
-        
+
         # 1. Prepare Docker execution script
         # We inject a simple JSON reporter to capture error details structured
         full_script = self._wrap_code(code, test_code)
-        
+
         # 2. Build Docker Command
         cmd = [
-            "docker", "run", "--rm", "-i",
-            "--network", "none",
-            "--memory", "512m",
-            "--cpus", "0.5",
+            "docker",
+            "run",
+            "--rm",
+            "-i",
+            "--network",
+            "none",
+            "--memory",
+            "512m",
+            "--cpus",
+            "0.5",
             self.image,
-            "python", "-c", full_script
+            "python",
+            "-c",
+            full_script,
         ]
 
         try:
@@ -54,16 +62,16 @@ class DockerPythonExecutor(BaseExecutor):
                 *cmd,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                stderr=asyncio.subprocess.PIPE,
             )
-            
+
             # Note: We don't need stdin here as we pass the script via -c
             # but we use communicate to wait for completion
             stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                process.communicate(), 
-                timeout=timeout + 5.0 # Give docker some grace period
+                process.communicate(),
+                timeout=timeout + 5.0,  # Give docker some grace period
             )
-            
+
             stdout = stdout_bytes.decode("utf-8", errors="replace")
             stderr = stderr_bytes.decode("utf-8", errors="replace")
             duration = time.time() - start_time
@@ -80,16 +88,16 @@ class DockerPythonExecutor(BaseExecutor):
                     parts = stdout.split("LOGICHIVE_RESULT_START")
                     json_str = parts[1].split("LOGICHIVE_RESULT_END")[0]
                     raw_result = json.loads(json_str)
-                    
+
                     if raw_result.get("error"):
                         err_info = raw_result["error"]
                         error = ExecutionError(
                             name=err_info.get("name", "RuntimeError"),
                             value=err_info.get("value", ""),
-                            traceback=err_info.get("traceback", "")
+                            traceback=err_info.get("traceback", ""),
                         )
                         status = ExecutionStatus.FAILURE
-                    
+
                     if "main_result" in raw_result:
                         results.append(Result(data=raw_result["main_result"]))
                 except Exception as e:
@@ -99,7 +107,7 @@ class DockerPythonExecutor(BaseExecutor):
                 error = ExecutionError(
                     name="DockerError",
                     value=f"Container exited with code {process.returncode}",
-                    traceback=stderr
+                    traceback=stderr,
                 )
 
             return ExecutionResult(
@@ -107,14 +115,14 @@ class DockerPythonExecutor(BaseExecutor):
                 logs=ExecutionLogs(stdout=stdout, stderr=stderr),
                 results=results,
                 error=error,
-                duration=duration
+                duration=duration,
             )
 
         except asyncio.TimeoutError:
             return ExecutionResult(
                 status=ExecutionStatus.TIMEOUT,
                 logs=ExecutionLogs(stderr="Execution timed out inside Docker."),
-                duration=time.time() - start_time
+                duration=time.time() - start_time,
             )
         except Exception as e:
             logger.exception("DockerPythonExecutor: Unhandled exception")
@@ -122,13 +130,13 @@ class DockerPythonExecutor(BaseExecutor):
                 status=ExecutionStatus.ERROR,
                 logs=ExecutionLogs(stderr=str(e)),
                 error=ExecutionError(name=type(e).__name__, value=str(e), traceback=""),
-                duration=time.time() - start_time
+                duration=time.time() - start_time,
             )
 
     def _wrap_code(self, code: str, test_code: str) -> str:
         """Injects reporting logic to capture results from within the container."""
         import json
-        
+
         # We use a literal block to avoid escaping hell
         return f"""
 import json, traceback, sys

@@ -17,6 +17,7 @@ def recover_embeddings_internal(conn):
             meta = json.loads(meta_j) if meta_j else {}
             deps = meta.get("dependencies", [])
             from core.consolidation import LogicIntelligence
+
             intel = LogicIntelligence()
             text = intel.construct_search_document(name, desc, tags, code)
             emb = embedding_service.get_embedding(text)
@@ -29,6 +30,4 @@ def recover_embeddings_internal(conn):
             )
         conn.commit()
     except Exception as e:
-        logger.error(
-            f"Recovery failed (recover_embeddings_internal): {e}", exc_info=True
-        )
+        logger.error(f"Recovery failed (recover_embeddings_internal): {e}", exc_info=True)

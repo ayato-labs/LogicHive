@@ -47,9 +47,7 @@ class VectorIndexManager:
                     self.index = faiss.read_index(self._index_path)
                     with open(self._mapping_path) as f:
                         mapping = json.load(f)
-                        self.id_to_name = {
-                            int(k): v for k, v in mapping["id_to_name"].items()
-                        }
+                        self.id_to_name = {int(k): v for k, v in mapping["id_to_name"].items()}
                         self.name_to_id = mapping["name_to_id"]
                         self._current_id = mapping["current_id"]
                     self._initialized = True
@@ -72,9 +70,7 @@ class VectorIndexManager:
                             embeddings.append(vec)
                             names.append(full_key)
                     except (json.JSONDecodeError, TypeError, KeyError) as e:
-                        logger.warning(
-                            f"FAISS: Skipping row due to invalid embedding: {e}"
-                        )
+                        logger.warning(f"FAISS: Skipping row due to invalid embedding: {e}")
                         continue
 
             if embeddings:
@@ -122,7 +118,9 @@ class VectorIndexManager:
             await self.save_to_disk()
 
             if needs_rebuild:
-                logger.info(f"FAISS: Ghost vectors exceeded threshold for '{full_key}', rebuilding.")
+                logger.info(
+                    f"FAISS: Ghost vectors exceeded threshold for '{full_key}', rebuilding."
+                )
                 await self._rebuild_internal()
 
     async def remove_vector(self, name: str, project: str = "default"):
@@ -208,11 +206,11 @@ class VectorIndexManager:
                     f,
                 )
         except Exception as e:
-            logger.error(
-                f"FAISS: Failed to save index to {self._index_path}: {e}", exc_info=True
-            )
+            logger.error(f"FAISS: Failed to save index to {self._index_path}: {e}", exc_info=True)
 
-    async def search(self, query_emb: list[float], limit: int = 5, project: str | None = None) -> list[tuple]:
+    async def search(
+        self, query_emb: list[float], limit: int = 5, project: str | None = None
+    ) -> list[tuple]:
         if not self._initialized:
             return []
 
@@ -237,29 +235,30 @@ class VectorIndexManager:
             full_key = self.id_to_name.get(int(idx))
             if full_key and full_key.startswith(project_prefix):
                 name_part = full_key.split(":", 1)[1]
-                results.append({
-                    "name": name_part,
-                    "project": search_project,
-                    "similarity": float(similarities[0][i])
-                })
+                results.append(
+                    {
+                        "name": name_part,
+                        "project": search_project,
+                        "similarity": float(similarities[0][i]),
+                    }
+                )
 
             if len(results) >= limit:
                 break
 
         return results
 
-
     async def check_health(self) -> dict[str, Any]:
         """Checks if the FAISS index is loaded and has entries."""
         if not self._initialized:
             return {"status": "Warning", "message": "Vector store not yet initialized."}
-        
+
         count = self.index.ntotal
         mapped = len(self.id_to_name)
         return {
             "status": "Healthy" if count >= 0 else "Error",
             "message": f"Index has {count} total entries ({mapped} mapped active).",
-            "details": {"total": count, "active": mapped}
+            "details": {"total": count, "active": mapped},
         }
 
 

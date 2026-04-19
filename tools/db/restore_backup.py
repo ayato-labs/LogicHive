@@ -1,7 +1,7 @@
 import asyncio
-import sys
-import os
 import logging
+import os
+import sys
 
 # Add src to path
 sys.path.append(os.path.abspath("src"))
@@ -9,8 +9,8 @@ sys.path.append(os.path.abspath("src"))
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
-from storage.auto_backup import backup_manager  # noqa: E402
 from core.config import GITHUB_TOKEN  # noqa: E402
+from storage.auto_backup import backup_manager  # noqa: E402
 
 
 async def restore_backup():
@@ -33,9 +33,7 @@ async def restore_backup():
             print(f"- {err}")
 
     if results["success"] > 0:
-        print(
-            "\nDatabase and Vector Index have been synchronized with the backup repository."
-        )
+        print("\nDatabase and Vector Index have been synchronized with the backup repository.")
     else:
         print("\nNo data was restored.")
 

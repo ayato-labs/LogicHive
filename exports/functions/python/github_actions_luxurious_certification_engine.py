@@ -16,7 +16,7 @@ def generate_report(results_dir, output_file):
 
     for filename in os.listdir(results_dir):
         if filename.endswith(".json"):
-            with open(os.path.join(results_dir, filename), "r") as f:
+            with open(os.path.join(results_dir, filename)) as f:
                 try:
                     results.append(json.load(f))
                 except json.JSONDecodeError:
@@ -27,9 +27,7 @@ def generate_report(results_dir, output_file):
         return
 
     # Sort results for consistent table presentation
-    results.sort(
-        key=lambda x: (x.get("os", ""), x.get("node", ""), x.get("python", ""))
-    )
+    results.sort(key=lambda x: (x.get("os", ""), x.get("node", ""), x.get("python", "")))
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 

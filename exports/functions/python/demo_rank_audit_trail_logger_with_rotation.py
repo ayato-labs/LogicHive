@@ -1,3 +1,1 @@
-import logging
-from logging.handlers import RotatingFileHandler
 # Complex logging setup with rotation...

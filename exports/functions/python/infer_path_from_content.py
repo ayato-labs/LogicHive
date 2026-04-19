@@ -1,5 +1,6 @@
 import re
 
+
 def infer_path_from_content(content: str) -> str | None:
     """
     Heuristically infers a file path from a leading comment in the code content.

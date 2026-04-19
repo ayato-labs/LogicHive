@@ -28,6 +28,7 @@ def test_func():
     # Total = 3
     assert evaluator._count_assertions(test_code) == 3
 
+
 @pytest.mark.asyncio
 async def test_find_hollow_methods():
     evaluator = DeterministicEvaluator()
@@ -52,6 +53,7 @@ async def test_find_hollow_methods():
     code_logic = "def logic(x):\n    y = x + 1\n    return y"
     assert "logic" not in evaluator._find_hollow_methods(code_logic)
 
+
 @pytest.mark.asyncio
 async def test_deterministic_evaluate_python_scores():
     evaluator = DeterministicEvaluator()
@@ -68,10 +70,11 @@ async def test_deterministic_evaluate_python_scores():
 
     # Hollow logic penalty
     code_hollow = "def hollow(): pass"
-    test_hollow = "assert True\nassert True\nassert True" # 3 assertions (100)
+    test_hollow = "assert True\nassert True\nassert True"  # 3 assertions (100)
     res_hollow = await evaluator.evaluate(code_hollow, "python", test_code=test_hollow)
     # 100 - 30 = 70
     assert res_hollow.score == 70.0
+
 
 @pytest.mark.asyncio
 async def test_deterministic_skip_non_python():

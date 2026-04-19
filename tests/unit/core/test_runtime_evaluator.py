@@ -1,10 +1,12 @@
 import pytest
-import asyncio
+
 from core.evaluation.plugins.runtime import RuntimeEvaluator
+
 
 @pytest.fixture
 def runtime_evaluator():
     return RuntimeEvaluator()
+
 
 @pytest.mark.asyncio
 async def test_runtime_evaluator_pass(runtime_evaluator):
@@ -19,6 +21,7 @@ async def test_runtime_evaluator_pass(runtime_evaluator):
     assert "duration_ms" in result.details
     assert result.details["duration_ms"] >= 0
 
+
 @pytest.mark.asyncio
 async def test_runtime_evaluator_custom_timeout(runtime_evaluator):
     """Verifies that custom timeouts are respected."""
@@ -31,6 +34,7 @@ async def test_runtime_evaluator_custom_timeout(runtime_evaluator):
     assert result.score == 100.0
     # duration_ms should be around 500ms + overhead
     assert result.details["duration_ms"] >= 400
+
 
 @pytest.mark.asyncio
 async def test_runtime_evaluator_timeout_rejection(runtime_evaluator):
@@ -46,6 +50,7 @@ async def test_runtime_evaluator_timeout_rejection(runtime_evaluator):
     # On some systems it might say "Execution timed out" or "Critical Failure"
     assert any(msg in result.reason for msg in ["timed out", "Possible infinite loop"])
     assert result.details["status"] == "timeout"
+
 
 @pytest.mark.asyncio
 async def test_runtime_evaluator_no_test(runtime_evaluator):

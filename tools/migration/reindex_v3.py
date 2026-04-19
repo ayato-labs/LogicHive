@@ -1,7 +1,7 @@
 import asyncio
+import logging
 import os
 import sys
-import logging
 
 # Set up logging for the script
 logging.basicConfig(level=logging.INFO)
@@ -10,9 +10,9 @@ logger = logging.getLogger(__name__)
 # Add src to path
 sys.path.append(os.path.abspath("src"))
 
-from storage.sqlite_api import sqlite_storage  # noqa: E402
-from core.consolidation import LogicIntelligence  # noqa: E402
 from core.config import GEMINI_API_KEY, GEMINI_MODEL  # noqa: E402
+from core.consolidation import LogicIntelligence  # noqa: E402
+from storage.sqlite_api import sqlite_storage  # noqa: E402
 
 SYSTEM_ORG_ID = "00000000-0000-0000-0000-000000000000"
 
@@ -48,14 +48,10 @@ async def reindex_all():
                 new_tags = optimized["tags"]
 
                 if not new_desc:
-                    logger.warning(
-                        f"     !!! AI returned empty description for {name}."
-                    )
+                    logger.warning(f"     !!! AI returned empty description for {name}.")
 
                 # 2. Construct RAG Document
-                search_doc = intel.construct_search_document(
-                    name, new_desc, new_tags, code
-                )
+                search_doc = intel.construct_search_document(name, new_desc, new_tags, code)
 
                 # 3. Generate Embedding
                 new_emb = await intel.generate_embedding(search_doc)

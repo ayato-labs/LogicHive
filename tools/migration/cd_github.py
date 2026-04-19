@@ -14,9 +14,7 @@ def run_command(command, check=True):
 def get_next_version():
     """Fetches the latest v* tag and increments the patch version."""
     try:
-        result = subprocess.run(
-            ["git", "tag", "-l", "v*"], capture_output=True, text=True
-        )
+        result = subprocess.run(["git", "tag", "-l", "v*"], capture_output=True, text=True)
         tags = result.stdout.strip().split("\n")
         if not tags or tags == [""]:
             return "v2.2.1"  # Default starting point for this branch
@@ -53,9 +51,7 @@ def main():
     run_command(["git", "add", "."])
 
     try:
-        commit_msg = input(
-            f"Enter commit message (Enter for 'release: {next_ver}'): "
-        ).strip()
+        commit_msg = input(f"Enter commit message (Enter for 'release: {next_ver}'): ").strip()
     except EOFError:
         commit_msg = ""
 

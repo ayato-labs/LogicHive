@@ -1,15 +1,16 @@
-from typing import Optional
 from sqlalchemy.orm import Session
+
 
 class VectorServiceWrapper:
     """
     High-level service wrapper for managing vector indexing and retrieval for novels.
     """
+
     def __init__(self, config, manager):
         self.config = config
         self.manager = manager
 
-    async def index_novel(self, novel_obj: Any, db: Optional[Session] = None):
+    async def index_novel(self, novel_obj: Any, db: Session | None = None):
         """特定の作品のメタデータをインデックスに登録または更新する"""
         try:
             # 1. メタデータの更新

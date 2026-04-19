@@ -34,9 +34,7 @@ def ping():
     """Verify API connectivity with a minimal request (Readiness Probe)."""
     try:
         client = get_client()
-        response = client.models.generate_content(
-            model="gemma-3-27b-it", contents="Say 'OK'"
-        )
+        response = client.models.generate_content(model="gemma-3-27b-it", contents="Say 'OK'")
         return response and response.text
     except Exception as e:
         raise ConnectionError(f"API Connectivity Check Failed: {e}")

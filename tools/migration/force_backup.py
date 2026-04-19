@@ -1,15 +1,15 @@
 import asyncio
-import sys
 import os
+import sys
 
 # Add src to path
 sys.path.append(os.path.abspath("src"))
 
-from storage.sqlite_api import sqlite_storage
-from storage.auto_backup import backup_manager
-from core.config import GITHUB_TOKEN
-
 import logging
+
+from core.config import GITHUB_TOKEN
+from storage.auto_backup import backup_manager
+from storage.sqlite_api import sqlite_storage
 
 # Configure logging to see AutoBackupManager output
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")

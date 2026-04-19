@@ -17,7 +17,7 @@ async def test_full_save_and_search_flow(test_db, mock_intel):
         code=code,
         project="test-proj",
         tags=["pipeline"],
-        test_code="assert pipeline_func() == 42"
+        test_code="assert pipeline_func() == 42",
     )
     assert success is True
 
@@ -34,6 +34,7 @@ async def test_full_save_and_search_flow(test_db, mock_intel):
     found_names = [res["name"] for res in search_results]
     assert name in found_names
 
+
 @pytest.mark.asyncio
 async def test_orchestrator_rejection_on_invalid_code(test_db, mock_intel):
     """Verifies that the orchestrator blocks saving of syntactically broken code."""
@@ -42,14 +43,11 @@ async def test_orchestrator_rejection_on_invalid_code(test_db, mock_intel):
     # Should raise ValidationError or return False depending on your orchestrator's error handle
     # Based on src/orchestrator.py:202, it raises ValidationError for score=0
     with pytest.raises(ValidationError):
-        await do_save_async(
-            name="broken",
-            code=broken_code,
-            project="error-proj"
-        )
+        await do_save_async(name="broken", code=broken_code, project="error-proj")
 
     # Ensure it wasn't saved
     assert await sqlite_storage.get_function_by_name("broken", project="error-proj") is None
+
 
 @pytest.mark.asyncio
 async def test_orchestrator_metadata_optimization(test_db, mock_intel):
@@ -57,17 +55,17 @@ async def test_orchestrator_metadata_optimization(test_db, mock_intel):
     # Setup mock to return optimized metadata
     mock_intel.optimize_metadata.return_value = {
         "description": "Optimized description",
-        "tags": ["ai-tag"]
+        "tags": ["ai-tag"],
     }
 
     name = "no_meta_func"
     await do_save_async(
         name=name,
-        code="def optimized_func(): return True", # Validating return
-        description="", # Trigger optimization
+        code="def optimized_func(): return True",  # Validating return
+        description="",  # Trigger optimization
         tags=[],
         project="meta-proj",
-        test_code="assert optimized_func() is True"
+        test_code="assert optimized_func() is True",
     )
 
     retrieved = await sqlite_storage.get_function_by_name(name, project="meta-proj")

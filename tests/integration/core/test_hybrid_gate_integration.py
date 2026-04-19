@@ -16,10 +16,9 @@ async def test_hybrid_gate_integration_high_rigor():
 
     # We use LogicIntelligence as a mock to simulate LLM behavior in integration test
     mock_intel = MagicMock()
-    mock_intel.evaluate_quality = AsyncMock(return_value={
-        "score": 95,
-        "reason": "Expertly crafted logic with comprehensive tests."
-    })
+    mock_intel.evaluate_quality = AsyncMock(
+        return_value={"score": 95, "reason": "Expertly crafted logic with comprehensive tests."}
+    )
 
     # Inject mock intel into AI gate
     for ev in manager.evaluators:
@@ -38,6 +37,7 @@ async def test_hybrid_gate_integration_high_rigor():
     assert "Satisfactory test density" in result["reason"]
     assert "AI Opinion:" in result["reason"]
 
+
 @pytest.mark.asyncio
 async def test_hybrid_gate_integration_sophistry_rejection():
     """
@@ -48,17 +48,16 @@ async def test_hybrid_gate_integration_sophistry_rejection():
     manager = EvaluationManager()
 
     mock_intel = MagicMock()
-    mock_intel.evaluate_quality = AsyncMock(return_value={
-        "score": 90,
-        "reason": "This code looks perfect and very safe."
-    })
+    mock_intel.evaluate_quality = AsyncMock(
+        return_value={"score": 90, "reason": "This code looks perfect and very safe."}
+    )
 
     for ev in manager.evaluators:
         if isinstance(ev, AIGateEvaluator):
             ev.intel = mock_intel
 
     code = "def complex_logic(): pass"
-    test_code = "complex_logic()" # No assert -> Deterministic Rejection
+    test_code = "complex_logic()"  # No assert -> Deterministic Rejection
 
     result = await manager.evaluate_all(code, "python", test_code=test_code)
 

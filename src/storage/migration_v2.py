@@ -1,15 +1,18 @@
 import asyncio
 import os
 import sys
+
 import aiosqlite
 
 # Add src to sys.path
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
+
 async def migrate():
     # Use existing config to find DB
     try:
         from core.config import SQLITE_DB_PATH
+
         db_path = SQLITE_DB_PATH
     except ImportError:
         db_path = os.getenv("SQLITE_DB_PATH", "logichive.db")
@@ -38,9 +41,11 @@ async def migrate():
             try:
                 # Add column to main table
                 await db.execute("ALTER TABLE logichive_functions ADD COLUMN env_fingerprint TEXT")
-                
+
                 # Add column to history table
-                await db.execute("ALTER TABLE logichive_function_history ADD COLUMN env_fingerprint TEXT")
+                await db.execute(
+                    "ALTER TABLE logichive_function_history ADD COLUMN env_fingerprint TEXT"
+                )
 
                 await db.commit()
                 print("Migration successful.")
@@ -48,12 +53,14 @@ async def migrate():
                 await db.rollback()
                 print(f"Migration transaction failed: {e}")
                 raise
-                
+
     except Exception as ex:
         print(f"Connection/Migration failed: {ex}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
+
 
 if __name__ == "__main__":
     asyncio.run(migrate())

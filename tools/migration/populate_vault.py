@@ -1,6 +1,6 @@
+import ast
 import asyncio
 import sys
-import ast
 from pathlib import Path
 
 # Add src to sys.path
@@ -11,7 +11,7 @@ from orchestrator import do_save_async
 
 def extract_functions_from_file(file_path):
     """Parses a file and returns a list of (function_name, code) tuples."""
-    with open(file_path, "r", encoding="utf-8") as f:
+    with open(file_path, encoding="utf-8") as f:
         content = f.read()
 
     tree = ast.parse(content)

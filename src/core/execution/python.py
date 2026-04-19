@@ -8,6 +8,7 @@ import traceback
 from pathlib import Path
 
 from core.config import ENABLE_ENV_POOLING
+
 from .base import (
     BaseExecutor,
     ExecutionError,
@@ -33,6 +34,7 @@ class EphemeralPythonExecutor(BaseExecutor):
     def _kill_process_tree(self, pid: int):
         """Kills a process and all its children cross-platform."""
         import psutil
+
         try:
             parent = psutil.Process(pid)
             for child in parent.children(recursive=True):
@@ -59,16 +61,17 @@ class EphemeralPythonExecutor(BaseExecutor):
 
         # 1. Check for Pre-warmed Pool match
         from .pool import PoolManager
+
         pool_manager = PoolManager.get_instance()
         pooled_env = None
-        
+
         # Simple matching logic: if 'torch' is in dependencies, use torch pools
         if ENABLE_ENV_POOLING and dependencies:
             target_spec = None
             if any("torch" in d.lower() for d in dependencies):
                 # Prefer GPU if available and functional
                 target_spec = "torch-gpu" if pool_manager.has_gpu else "torch-cpu"
-            
+
             if target_spec:
                 pooled_env = await pool_manager.acquire(target_spec, timeout=1.0)
 
@@ -99,13 +102,30 @@ class EphemeralPythonExecutor(BaseExecutor):
 
             # 3. Execute with isolated environment
             process_env = {
-                k: v for k, v in os.environ.items()
-                if k in ["PATH", "SYSTEMROOT", "SystemDrive", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP", "USERNAME", "HOME", "HOMEDRIVE", "HOMEPATH", "ProgramData"]
+                k: v
+                for k, v in os.environ.items()
+                if k
+                in [
+                    "PATH",
+                    "SYSTEMROOT",
+                    "SystemDrive",
+                    "USERPROFILE",
+                    "APPDATA",
+                    "LOCALAPPDATA",
+                    "TEMP",
+                    "TMP",
+                    "USERNAME",
+                    "HOME",
+                    "HOMEDRIVE",
+                    "HOMEPATH",
+                    "ProgramData",
+                ]
             }
             process_env["PYTHONPATH"] = ""
             process_env["PYTHONNOUSERSITE"] = "1"
 
             import psutil
+
             memory_exceeded = False
             done_event = asyncio.Event()
 
@@ -126,7 +146,7 @@ class EphemeralPythonExecutor(BaseExecutor):
                                 parent = psutil.Process(process.pid)
                                 if not parent.is_running():
                                     break
-                                
+
                                 # Sum up memory of parent and all recursive children
                                 total_mem = parent.memory_info().rss
                                 for child in parent.children(recursive=True):
@@ -136,13 +156,15 @@ class EphemeralPythonExecutor(BaseExecutor):
                                         continue
 
                                 if (total_mem / 1024 / 1024) > memory_limit_mb:
-                                    logger.warning(f"Executor: Memory limit exceeded ({total_mem / 1024 / 1024:.1f}MB > {memory_limit_mb}MB). Killing process tree.")
+                                    logger.warning(
+                                        f"Executor: Memory limit exceeded ({total_mem / 1024 / 1024:.1f}MB > {memory_limit_mb}MB). Killing process tree."
+                                    )
                                     memory_exceeded = True
                                     self._kill_process_tree(process.pid)
                                     break
                             except (psutil.NoSuchProcess, psutil.AccessDenied):
                                 break
-                            await asyncio.sleep(0.5) # Reduced frequency for stability
+                            await asyncio.sleep(0.5)  # Reduced frequency for stability
                     except Exception as e:
                         logger.error(f"Executor: Resource monitor crashed: {e}")
 
@@ -180,7 +202,9 @@ class EphemeralPythonExecutor(BaseExecutor):
 
                 # 4. Parse Results
                 duration = time.time() - start_time
-                status = ExecutionStatus.SUCCESS if process.returncode == 0 else ExecutionStatus.FAILURE
+                status = (
+                    ExecutionStatus.SUCCESS if process.returncode == 0 else ExecutionStatus.FAILURE
+                )
 
                 # Try to load structured results from the harness
                 results = []
@@ -190,16 +214,18 @@ class EphemeralPythonExecutor(BaseExecutor):
                     try:
                         raw_result = json.loads(result_file.read_text(encoding="utf-8"))
                         if "main_result" in raw_result:
-                            results.append(Result(
-                                data=raw_result["main_result"],
-                                metadata={"is_main_result": True}
-                            ))
+                            results.append(
+                                Result(
+                                    data=raw_result["main_result"],
+                                    metadata={"is_main_result": True},
+                                )
+                            )
                         if raw_result.get("error"):
                             err_info = raw_result["error"]
                             error = ExecutionError(
                                 name=err_info.get("name", "UnknownError"),
                                 value=err_info.get("value", ""),
-                                traceback=err_info.get("traceback", "")
+                                traceback=err_info.get("traceback", ""),
                             )
                             status = ExecutionStatus.FAILURE
                     except Exception as e:
@@ -210,7 +236,7 @@ class EphemeralPythonExecutor(BaseExecutor):
                     error = ExecutionError(
                         name="RuntimeError",
                         value=f"Process exited with code {process.returncode}",
-                        traceback=stderr
+                        traceback=stderr,
                     )
 
                 return ExecutionResult(
@@ -218,7 +244,7 @@ class EphemeralPythonExecutor(BaseExecutor):
                     logs=ExecutionLogs(stdout=stdout, stderr=stderr),
                     results=results,
                     error=error,
-                    duration=duration
+                    duration=duration,
                 )
 
             except Exception as e:
@@ -226,15 +252,19 @@ class EphemeralPythonExecutor(BaseExecutor):
                 return ExecutionResult(
                     status=ExecutionStatus.ERROR,
                     logs=ExecutionLogs(stderr=str(e)),
-                    error=ExecutionError(name=type(e).__name__, value=str(e), traceback=traceback.format_exc()),
-                    duration=time.time() - start_time
+                    error=ExecutionError(
+                        name=type(e).__name__, value=str(e), traceback=traceback.format_exc()
+                    ),
+                    duration=time.time() - start_time,
                 )
             finally:
                 if pooled_env:
                     # Mark used environment for disposal and background replacement
                     await pool_manager.release(pooled_env)
 
-    def _generate_harness(self, code: str, test_code: str, result_file: Path, mock_imports: list[str] | None = None) -> str:
+    def _generate_harness(
+        self, code: str, test_code: str, result_file: Path, mock_imports: list[str] | None = None
+    ) -> str:
         """
         Generates a robust harness that executes the code and exports results as JSON.
         Modeled after Jupyter/E2B behavior.
@@ -297,7 +327,7 @@ def run_user_code():
         if {json.dumps(test_code)}:
             # Tests are expected to raise AssertionError on failure
             exec({json.dumps(test_code)}, globals())
-            results["main_result"] = "Tests Passed (with Mocks: {', '.join(mock_imports)})" if {str(bool(mock_imports))} else "Tests Passed"
+            results["main_result"] = "Tests Passed (with Mocks: {", ".join(mock_imports)})" if {str(bool(mock_imports))} else "Tests Passed"
         else:
             # If no tests, we just check if it imports/defines correctly
             results["main_result"] = "Execution Successful"

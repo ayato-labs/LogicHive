@@ -18,9 +18,7 @@ def main():
     run_command(["git", "add", "."])
 
     try:
-        commit_msg = input(
-            f"Enter commit message (Enter for 'release: {next_ver}'): "
-        ).strip()
+        commit_msg = input(f"Enter commit message (Enter for 'release: {next_ver}'): ").strip()
     except EOFError:
         commit_msg = ""
 

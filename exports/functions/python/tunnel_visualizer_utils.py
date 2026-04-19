@@ -1,18 +1,19 @@
+import sys
+import time
+
 import httpx
 import qrcode
-import time
-import sys
-from typing import Optional
 
-def get_ngrok_public_url(port: int = 4040, max_retries: int = 10, delay: int = 2) -> Optional[str]:
+
+def get_ngrok_public_url(port: int = 4040, max_retries: int = 10, delay: int = 2) -> str | None:
     """
     Retrieves the public URL from a running ngrok instance by querying its local API.
-    
+
     Args:
         port: The local port where ngrok's inspection API is running (default 4040).
         max_retries: Maximum number of attempts to fetch the URL.
         delay: Seconds to wait between retries.
-        
+
     Returns:
         The public URL string if found, otherwise None.
     """
@@ -29,26 +30,28 @@ def get_ngrok_public_url(port: int = 4040, max_retries: int = 10, delay: int = 2
         except Exception as e:
             # Print other unexpected errors to stderr instead of silent pass
             print(f"Warning: Unexpected error while polling ngrok: {e}", file=sys.stderr)
-        
+
         time.sleep(delay)
     return None
 
-def display_terminal_qr(data: str, title: Optional[str] = None):
+
+def display_terminal_qr(data: str, title: str | None = None):
     """
     Generates an ASCII QR code for the given data and prints it to the terminal.
     """
     if title:
-        print(f"\n{'='*50}")
+        print(f"\n{'=' * 50}")
         print(f"  {title}")
-        print(f"{'='*50}")
-    
+        print(f"{'=' * 50}")
+
     print(f"\nData: {data}\n")
-    
+
     qr = qrcode.QRCode(version=1, box_size=1, border=4)
     qr.add_data(data)
     qr.make(fit=True)
     qr.print_ascii(invert=True)
     print("\nScan the QR code above to open the link on your mobile device.")
+
 
 def tunnel_visualizer(api_port: int = 4040):
     """
@@ -59,4 +62,6 @@ def tunnel_visualizer(api_port: int = 4040):
     if url:
         display_terminal_qr(url, title="Tunnel Established")
     else:
-        print("Error: ngrok tunnel not found. Make sure ngrok is running and its API port is correct.")
+        print(
+            "Error: ngrok tunnel not found. Make sure ngrok is running and its API port is correct."
+        )

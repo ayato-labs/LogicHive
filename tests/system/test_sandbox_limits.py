@@ -35,6 +35,7 @@ for i in range(10**7): # This will consume significant memory
     assert result.status == ExecutionStatus.MEMORY_LIMIT
     assert "Memory limit exceeded" in result.logs.stderr
 
+
 @pytest.mark.asyncio
 async def test_timeout_enforcement():
     executor = EphemeralPythonExecutor()
@@ -47,6 +48,7 @@ async def test_timeout_enforcement():
     print(f"\nTimeout Test Status: {result.status}")
 
     assert result.status == ExecutionStatus.TIMEOUT
+
 
 if __name__ == "__main__":
     asyncio.run(test_memory_limit_enforcement())

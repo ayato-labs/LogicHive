@@ -1,5 +1,5 @@
-import sqlite3
 import os
+import sqlite3
 import sys
 
 # Add src to path
@@ -19,9 +19,7 @@ conn = sqlite3.connect(db_path)
 cursor = conn.cursor()
 
 print("\n--- SCHEMA ---")
-cursor.execute(
-    "SELECT sql FROM sqlite_master WHERE type='table' AND name='logichive_functions'"
-)
+cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='logichive_functions'")
 row = cursor.fetchone()
 if row:
     print(row[0])

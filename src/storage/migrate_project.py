@@ -7,10 +7,12 @@ import aiosqlite
 # Add src to sys.path
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
+
 async def migrate():
     # Use existing config to find DB
     try:
         from core.config import SQLITE_DB_PATH
+
         db_path = SQLITE_DB_PATH
     except ImportError:
         db_path = os.getenv("SQLITE_DB_PATH", "logichive.db")
@@ -38,7 +40,9 @@ async def migrate():
             await db.execute("BEGIN TRANSACTION")
             try:
                 # --- logichive_functions migration ---
-                await db.execute("ALTER TABLE logichive_functions RENAME TO logichive_functions_old")
+                await db.execute(
+                    "ALTER TABLE logichive_functions RENAME TO logichive_functions_old"
+                )
 
                 await db.execute("""
                 CREATE TABLE logichive_functions (
@@ -70,9 +74,22 @@ async def migrate():
                 # Define new table columns (excluding those not in old that we want to defaults)
                 # Actually, just get intersection plus defaults
                 target_cols = [
-                    "id", "name", "code", "description", "tags", "reliability_score",
-                    "test_metrics", "embedding", "language", "call_count", "code_hash",
-                    "version", "dependencies", "test_code", "created_at", "updated_at"
+                    "id",
+                    "name",
+                    "code",
+                    "description",
+                    "tags",
+                    "reliability_score",
+                    "test_metrics",
+                    "embedding",
+                    "language",
+                    "call_count",
+                    "code_hash",
+                    "version",
+                    "dependencies",
+                    "test_code",
+                    "created_at",
+                    "updated_at",
                 ]
 
                 # Filter target columns to only those that exist in the old table
@@ -80,10 +97,14 @@ async def migrate():
                 cols_str = ", ".join(common_cols)
 
                 print(f"Copying columns: {cols_str}")
-                await db.execute(f"INSERT INTO logichive_functions ({cols_str}) SELECT {cols_str} FROM logichive_functions_old")
+                await db.execute(
+                    f"INSERT INTO logichive_functions ({cols_str}) SELECT {cols_str} FROM logichive_functions_old"
+                )
 
                 # --- logichive_function_history migration ---
-                await db.execute("ALTER TABLE logichive_function_history RENAME TO logichive_function_history_old")
+                await db.execute(
+                    "ALTER TABLE logichive_function_history RENAME TO logichive_function_history_old"
+                )
 
                 await db.execute("""
                 CREATE TABLE logichive_function_history (
@@ -103,18 +124,32 @@ async def migrate():
                 )
                 """)
 
-                async with db.execute("PRAGMA table_info(logichive_function_history_old)") as cursor:
+                async with db.execute(
+                    "PRAGMA table_info(logichive_function_history_old)"
+                ) as cursor:
                     old_hist_cols = [row[1] for row in await cursor.fetchall()]
 
                 hist_target_cols = [
-                    "history_id", "function_id", "name", "code", "description", "tags",
-                    "language", "version", "code_hash", "dependencies", "test_code", "archived_at"
+                    "history_id",
+                    "function_id",
+                    "name",
+                    "code",
+                    "description",
+                    "tags",
+                    "language",
+                    "version",
+                    "code_hash",
+                    "dependencies",
+                    "test_code",
+                    "archived_at",
                 ]
                 common_hist_cols = [c for c in hist_target_cols if c in old_hist_cols]
                 hist_cols_str = ", ".join(common_hist_cols)
 
                 print(f"Copying history columns: {hist_cols_str}")
-                await db.execute(f"INSERT INTO logichive_function_history ({hist_cols_str}) SELECT {hist_cols_str} FROM logichive_function_history_old")
+                await db.execute(
+                    f"INSERT INTO logichive_function_history ({hist_cols_str}) SELECT {hist_cols_str} FROM logichive_function_history_old"
+                )
 
                 # --- Cleanup ---
                 await db.execute("DROP TABLE logichive_functions_old")
@@ -122,7 +157,9 @@ async def migrate():
 
                 # Update Indices
                 await db.execute("DROP INDEX IF EXISTS idx_func_name")
-                await db.execute("CREATE INDEX idx_func_project_name ON logichive_functions(project, name)")
+                await db.execute(
+                    "CREATE INDEX idx_func_project_name ON logichive_functions(project, name)"
+                )
 
                 await db.commit()
                 print("Migration successful.")
@@ -133,8 +170,10 @@ async def migrate():
     except Exception as ex:
         print(f"Connection/Migration failed: {ex}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
+
 
 if __name__ == "__main__":
     asyncio.run(migrate())

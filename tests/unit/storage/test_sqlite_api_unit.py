@@ -13,7 +13,7 @@ async def test_storage_upsert_and_get(test_db):
         "description": "A survival test",
         "embedding": [0.5] * 768,
         "language": "python",
-        "tags": ["test"]
+        "tags": ["test"],
     }
 
     # Save
@@ -26,26 +26,21 @@ async def test_storage_upsert_and_get(test_db):
     assert stored["code"] == data["code"]
     assert stored["description"] == data["description"]
 
+
 @pytest.mark.asyncio
 async def test_storage_project_isolation(test_db):
     """Verifies that functions with the same name but different projects are isolated."""
     common_name = "shared_name"
 
     # Save in project A
-    await sqlite_storage.upsert_function({
-        "name": common_name,
-        "project": "ProjectA",
-        "code": "code A",
-        "embedding": [0.1] * 768
-    })
+    await sqlite_storage.upsert_function(
+        {"name": common_name, "project": "ProjectA", "code": "code A", "embedding": [0.1] * 768}
+    )
 
     # Save in project B
-    await sqlite_storage.upsert_function({
-        "name": common_name,
-        "project": "ProjectB",
-        "code": "code B",
-        "embedding": [0.2] * 768
-    })
+    await sqlite_storage.upsert_function(
+        {"name": common_name, "project": "ProjectB", "code": "code B", "embedding": [0.2] * 768}
+    )
 
     # Verify retrieval fetches correct one
     res_a = await sqlite_storage.get_function_by_name(common_name, project="ProjectA")
@@ -54,16 +49,14 @@ async def test_storage_project_isolation(test_db):
     assert res_a["code"] == "code A"
     assert res_b["code"] == "code B"
 
+
 @pytest.mark.asyncio
 async def test_storage_deletion(test_db):
     """Verifies function deletion."""
     name = "to_be_deleted"
-    await sqlite_storage.upsert_function({
-        "name": name,
-        "project": "default",
-        "code": "pass",
-        "embedding": [0.0] * 768
-    })
+    await sqlite_storage.upsert_function(
+        {"name": name, "project": "default", "code": "pass", "embedding": [0.0] * 768}
+    )
 
     # Delete
     success = await sqlite_storage.delete_function(name)

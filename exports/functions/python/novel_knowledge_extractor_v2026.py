@@ -1,21 +1,24 @@
-from typing import Dict, List
 from pydantic import BaseModel, Field
+
 
 class WorldBibleEntrySchema(BaseModel):
     category: str = Field(..., description="ひとつ選択: character, location, item, plot, world")
     content: str = Field(..., description="具体的な事実・設定の内容")
 
+
 class CharacterProfileSchema(BaseModel):
     character_name: str = Field(..., description="名前")
-    aliases: List[str] = Field(default_factory=list, description="別名・二つ名")
-    personality_traits: List[str] = Field(default_factory=list, description="性格的特徴")
+    aliases: list[str] = Field(default_factory=list, description="別名・二つ名")
+    personality_traits: list[str] = Field(default_factory=list, description="性格的特徴")
     speech_style: str = Field(..., description="口調の特徴や決め台詞など")
-    relationships: Dict[str, str] = Field(default_factory=dict, description="他者との関係性")
+    relationships: dict[str, str] = Field(default_factory=dict, description="他者との関係性")
     summary: str = Field(..., description="魅力解析・まとめ")
 
+
 class FullAnalysisExtraction(BaseModel):
-    world_entries: List[WorldBibleEntrySchema] = Field(default_factory=list)
-    character_profiles: List[CharacterProfileSchema] = Field(default_factory=list)
+    world_entries: list[WorldBibleEntrySchema] = Field(default_factory=list)
+    character_profiles: list[CharacterProfileSchema] = Field(default_factory=list)
+
 
 async def extract_novel_knowledge(client, text: str, model: str = "gemini-2.0-flash"):
     """

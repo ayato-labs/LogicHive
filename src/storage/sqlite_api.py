@@ -100,7 +100,9 @@ class SqliteStorage:
                 new_version,
                 json.dumps(function_data.get("dependencies", [])),
                 function_data.get("test_code", ""),
-                json.dumps(function_data.get("env_fingerprint", {})) if function_data.get("env_fingerprint") else None,
+                json.dumps(function_data.get("env_fingerprint", {}))
+                if function_data.get("env_fingerprint")
+                else None,
             )
 
             await db.execute(
@@ -167,7 +169,9 @@ class SqliteStorage:
                 vector_matches = []
                 if embedding and len(embedding) == VECTOR_DIMENSION:
                     try:
-                        vector_matches = await vector_manager.search(embedding, limit=limit, project=project)
+                        vector_matches = await vector_manager.search(
+                            embedding, limit=limit, project=project
+                        )
                     except Exception as ve:
                         logger.warning(f"SQLite: Vector search failed: {ve}")
 
@@ -182,10 +186,12 @@ class SqliteStorage:
                         term = f"%{query_text.lower()}%"
                         conditions.append("(LOWER(name) LIKE ? OR LOWER(description) LIKE ?)")
                         params.extend([term, term])
-                    
+
                     if tags:
                         for tag in tags:
-                            conditions.append("EXISTS (SELECT 1 FROM json_each(tags) WHERE LOWER(value) = LOWER(?))")
+                            conditions.append(
+                                "EXISTS (SELECT 1 FROM json_each(tags) WHERE LOWER(value) = LOWER(?))"
+                            )
                             params.append(tag)
 
                     if language:
@@ -213,11 +219,13 @@ class SqliteStorage:
                     for match in vector_matches:
                         res_key = (match["project"], match["name"])
                         if res_key in final_results:
-                            final_results[res_key]["similarity"] = max(final_results[res_key]["similarity"], match["similarity"])
+                            final_results[res_key]["similarity"] = max(
+                                final_results[res_key]["similarity"], match["similarity"]
+                            )
                         else:
                             async with db.execute(
                                 f"SELECT {select_fields} FROM logichive_functions WHERE project = ? AND name = ?",
-                                res_key
+                                res_key,
                             ) as cursor:
                                 row = await cursor.fetchone()
                                 if row:
@@ -225,14 +233,17 @@ class SqliteStorage:
                                     processed["similarity"] = match["similarity"]
                                     final_results[res_key] = processed
 
-                results_list = sorted(final_results.values(), key=lambda x: x.get("similarity", 0), reverse=True)
+                results_list = sorted(
+                    final_results.values(), key=lambda x: x.get("similarity", 0), reverse=True
+                )
                 return results_list[:limit]
         except Exception as e:
             logger.error(f"SQLite: Find similar failed: {e}")
             raise StorageError(f"Hybrid search failed: {e}")
 
     def _process_row(self, row: dict[str, Any]) -> dict[str, Any]:
-        if not row: return None
+        if not row:
+            return None
         processed = dict(row)
         for field in ["tags", "test_metrics", "embedding", "dependencies", "env_fingerprint"]:
             if field in processed:
@@ -241,12 +252,13 @@ class SqliteStorage:
             processed["project"] = "default"
         return processed
 
-    async def get_function_by_name(self, name: str, project: str = "default") -> dict[str, Any] | None:
+    async def get_function_by_name(
+        self, name: str, project: str = "default"
+    ) -> dict[str, Any] | None:
         try:
             db = await get_db_connection()
             async with db.execute(
-                "SELECT * FROM logichive_functions WHERE project = ? AND name = ?",
-                (project, name)
+                "SELECT * FROM logichive_functions WHERE project = ? AND name = ?", (project, name)
             ) as cursor:
                 row = await cursor.fetchone()
             return self._process_row(dict(row)) if row else None
@@ -254,7 +266,9 @@ class SqliteStorage:
             logger.error(f"SQLite: Get failed for '{name}': {e}")
             return None
 
-    async def get_functions(self, project: str = None, tags: list[str] = None, limit: int = 50) -> list[dict[str, Any]]:
+    async def get_functions(
+        self, project: str = None, tags: list[str] = None, limit: int = 50
+    ) -> list[dict[str, Any]]:
         try:
             conditions = []
             params = []
@@ -263,11 +277,15 @@ class SqliteStorage:
                 params.append(project)
             if tags:
                 for tag in tags:
-                    conditions.append("EXISTS (SELECT 1 FROM json_each(tags) WHERE LOWER(value) = LOWER(?))")
+                    conditions.append(
+                        "EXISTS (SELECT 1 FROM json_each(tags) WHERE LOWER(value) = LOWER(?))"
+                    )
                     params.append(tag)
-            
+
             where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
-            sql = f"SELECT * FROM logichive_functions{where_clause} ORDER BY updated_at DESC LIMIT ?"
+            sql = (
+                f"SELECT * FROM logichive_functions{where_clause} ORDER BY updated_at DESC LIMIT ?"
+            )
             params.append(limit)
 
             db = await get_db_connection()
@@ -288,7 +306,7 @@ class SqliteStorage:
             db = await get_db_connection()
             await db.execute(
                 "UPDATE logichive_functions SET call_count = call_count + 1 WHERE project = ? AND name = ?",
-                (project, name)
+                (project, name),
             )
             await db.commit()
             return True
@@ -300,11 +318,14 @@ class SqliteStorage:
         """Checks if the database is accessible and the main table exists."""
         try:
             db = await get_db_connection()
-            async with db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='logichive_functions'") as cursor:
+            async with db.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='logichive_functions'"
+            ) as cursor:
                 if await cursor.fetchone():
                     return {"status": "Healthy", "message": "Database OK"}
                 return {"status": "Error", "message": "Table not found"}
         except Exception as e:
             return {"status": "Error", "message": str(e)}
+
 
 sqlite_storage = SqliteStorage()

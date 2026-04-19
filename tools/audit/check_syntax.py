@@ -1,9 +1,7 @@
-
-
 def check_file(path):
     print(f"Checking {path}...")
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             code = f.read()
         compile(code, path, "exec")
         print("✅ No syntax errors.")

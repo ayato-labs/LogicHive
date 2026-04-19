@@ -1,9 +1,8 @@
 import os
-from typing import List, Optional, Union
-from pathlib import Path
-import yaml
+
 from google import genai
 from google.genai import errors
+
 
 class NovelLLMClient:
     """
@@ -12,15 +11,15 @@ class NovelLLMClient:
     非同期（aio）呼び出し、および構造化出力（JSON Schema）をサポートします。
     """
 
-    def __init__(self, api_key: Optional[str] = None, presets: Optional[dict] = None):
+    def __init__(self, api_key: str | None = None, presets: dict | None = None):
         self.client = genai.Client(api_key=api_key or os.getenv("GOOGLE_API_KEY"))
         self.presets = presets or {
             "quality_priority": ["gemini-2.0-pro-exp-02-05", "gemini-2.0-flash"],
             "resource_priority": ["gemini-2.0-flash", "gemini-2.0-flash-lite"],
-            "embedding": ["gemini-embedding-001"]
+            "embedding": ["gemini-embedding-001"],
         }
 
-    def resolve_models(self, model_input: Union[str, List[str]]) -> List[str]:
+    def resolve_models(self, model_input: str | list[str]) -> list[str]:
         if isinstance(model_input, list):
             resolved = []
             for m in model_input:
@@ -29,7 +28,7 @@ class NovelLLMClient:
         return self.presets.get(model_input, [model_input])
 
     async def generate_content(
-        self, model: Union[str, List[str]], contents: Union[str, list], config: Optional[dict] = None, **kwargs
+        self, model: str | list[str], contents: str | list, config: dict | None = None, **kwargs
     ):
         """フォールバックロジック付き非同期生成。Structured Outputをサポート。"""
         models = self.resolve_models(model)
@@ -47,19 +46,21 @@ class NovelLLMClient:
                 error_str = str(e).lower()
                 if any(code in error_str for code in ["429", "500", "503"]):
                     continue
-                break # Prompt/Auth errors should not fallback
+                break  # Prompt/Auth errors should not fallback
             except Exception as e:
                 last_error = e
                 continue
         raise last_error
 
-    async def embed_content(self, model: Union[str, List[str]], contents: Union[str, list], **kwargs):
+    async def embed_content(self, model: str | list[str], contents: str | list, **kwargs):
         """フォールバックロジック付き非同期埋め込み。"""
         models = self.resolve_models(model)
         last_error = None
         for m in models:
             try:
-                return await self.client.aio.models.embed_content(model=m, contents=contents, **kwargs)
+                return await self.client.aio.models.embed_content(
+                    model=m, contents=contents, **kwargs
+                )
             except Exception as e:
                 last_error = e
                 continue

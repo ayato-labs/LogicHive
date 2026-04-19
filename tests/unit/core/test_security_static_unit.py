@@ -1,6 +1,7 @@
 import pytest
-import ast
-from src.core.evaluation.plugins.security_static import SecurityStaticEvaluator, SecurityVisitor
+
+from src.core.evaluation.plugins.security_static import SecurityStaticEvaluator
+
 
 @pytest.mark.asyncio
 async def test_security_eval_detection():
@@ -8,8 +9,9 @@ async def test_security_eval_detection():
     evaluator = SecurityStaticEvaluator()
     code = "def dangerous(): eval('os.system(\"rm -rf /\")')"
     result = await evaluator.evaluate(code, "python")
-    assert result.score == 60.0 # 100 - 40
+    assert result.score == 60.0  # 100 - 40
     assert "eval" in result.reason.lower()
+
 
 @pytest.mark.asyncio
 async def test_security_secret_detection():
@@ -20,6 +22,7 @@ async def test_security_secret_detection():
     assert result.score == 60.0
     assert "secret" in result.reason.lower()
 
+
 @pytest.mark.asyncio
 async def test_security_subprocess_shell_true():
     """Unit: Detect shell=True in subprocess."""
@@ -28,6 +31,7 @@ async def test_security_subprocess_shell_true():
     result = await evaluator.evaluate(code, "python")
     assert result.score == 60.0
     assert "shell=true" in result.reason.lower()
+
 
 @pytest.mark.asyncio
 async def test_security_sql_injection():
@@ -38,6 +42,7 @@ async def test_security_sql_injection():
     assert result.score == 60.0
     assert "sql injection" in result.reason.lower()
 
+
 @pytest.mark.asyncio
 async def test_security_syntax_error_resilience():
     """Unit: Ensure evaluator doesn't crash on invalid Python code."""
@@ -46,6 +51,7 @@ async def test_security_syntax_error_resilience():
     result = await evaluator.evaluate(invalid_code, "python")
     assert result.score == 0.0
     assert "syntax error" in result.reason.lower()
+
 
 @pytest.mark.asyncio
 async def test_security_clean_code():
