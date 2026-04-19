@@ -34,14 +34,24 @@ class DependencyVouchEvaluator(BaseEvaluator):
             return EvaluationResult(score=100.0, reason="No external dependencies found.")
 
         # 2. Filter out stdlib
-        # Inline stdlib check to avoid external file dependencies in evaluation plugins
         def check_stdlib(m):
-            std = {"os", "sys", "json", "re", "math", "datetime", "typing", "asyncio", "logging", "pathlib", "abc", "collections", "functools", "itertools", "threading", "multiprocessing", "pickle", "shutil", "tempfile", "time", "uuid", "hashlib", "base64", "xml", "html", "unittest", "pytest", "typing_extensions"}
+            std = {
+                "os", "sys", "json", "re", "math", "datetime", "typing", "asyncio", 
+                "logging", "pathlib", "abc", "collections", "functools", "itertools", 
+                "threading", "multiprocessing", "pickle", "shutil", "tempfile", "time", 
+                "uuid", "hashlib", "base64", "xml", "html", "unittest", "pytest", 
+                "typing_extensions", "random", "enum", "inspect", "traceback", 
+                "warnings", "importlib", "glob", "argparse"
+            }
             return m.split(".")[0] in std
         
-        # 3. Load project context (manifests)
-        cwd = os.getcwd()
-        declared_pkgs = self._load_manifest_dependencies(cwd)
+        # 3. Load project context (manifests) - Search upwards from current file to find project root
+        project_root = Path(__file__).parent.parent.parent.parent # src/core/evaluation/plugins -> root
+        declared_pkgs = self._load_manifest_dependencies(str(project_root))
+        
+        # Fallback to CWD if project_root doesn't have manifests
+        if not declared_pkgs:
+            declared_pkgs = self._load_manifest_dependencies(os.getcwd())
 
         hallucinated = []
         for imp in imports:
@@ -50,14 +60,7 @@ class DependencyVouchEvaluator(BaseEvaluator):
             
             top_level = imp.split(".")[0]
             
-            # 1. Check local files (rough check based on current dir)
-            is_local = os.path.exists(os.path.join(cwd, f"{top_level}.py")) or \
-                       os.path.exists(os.path.join(cwd, top_level, "__init__.py"))
-            
-            if is_local:
-                continue
-
-            # 2. Check manifests (REQUIRED for external libs)
+            # 1. Check manifests (REQUIRED for external libs)
             normalized_top = top_level.lower().replace("_", "-")
             if normalized_top in declared_pkgs:
                 continue
