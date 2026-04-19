@@ -2,13 +2,14 @@ import pytest
 import os
 import tempfile
 from pathlib import Path
-from src.core.evaluation.plugins.dependency_vouch import DependencyVouchEvaluator
+from core.evaluation.plugins.dependency_vouch import DependencyVouchEvaluator
 
 @pytest.mark.asyncio
 async def test_dependency_stdlib_allowed():
-    """Unit: Standard library imports should be allowed."""
+    """Unit: Standard library imports should be allowed (including expanded whitelist)."""
     evaluator = DependencyVouchEvaluator()
-    code = "import os\nimport sys\nfrom typing import List"
+    # Test common ones plus the newly added ones (random, enum)
+    code = "import os\nimport sys\nimport random\nimport enum\nfrom typing import List"
     result = await evaluator.evaluate(code, "python")
     assert result.score == 100.0
 
