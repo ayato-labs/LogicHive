@@ -195,10 +195,13 @@ async def do_save_async(
             },
         )
 
+    runtime_details = eval_res.get("details", {}).get("runtime", {}).get("details", {})
+    runtime_ms = runtime_details.get("duration_ms", 0) if isinstance(runtime_details, dict) else 0
+
     logger.info(
         f"Orchestrator: Quality Gate PASSED '{name}' (Score: {final_score:.1f}) | "
         f"Total Eval: {eval_duration_ms}ms | "
-        f"Runtime: {eval_res.get('details', {}).get('runtime', {}).get('details', {}).get('duration_ms', 0)}ms"
+        f"Runtime: {runtime_ms}ms"
     )
 
     # Calculate code hash for deduplication

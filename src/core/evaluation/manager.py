@@ -297,7 +297,7 @@ class EvaluationManager:
             "score": final_score,
             "reason": " | ".join(reasons),
             "details": {
-                k: {"score": v.score, "reason": v.reason, "details": v.details}
+                k: {"score": v.score, "reason": v.reason, "details": v.details or {}}
                 for k, v in results.items()
             },
         }
