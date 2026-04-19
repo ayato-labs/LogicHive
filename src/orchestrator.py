@@ -154,16 +154,25 @@ async def do_save_async(
         timeout = MAX_VERIFICATION_TIMEOUT
 
     eval_manager = EvaluationManager()
-    eval_res = await eval_manager.evaluate_all(
-        code,
-        language,
-        description=description,
-        tags=tags,
-        test_code=test_code,
-        dependencies=dependencies,
-        mock_imports=mock_imports,
-        timeout=timeout,
-    )
+    from time import perf_counter
+    start_eval = perf_counter()
+    
+    try:
+        eval_res = await eval_manager.evaluate_all(
+            code,
+            language,
+            description=description,
+            tags=tags,
+            test_code=test_code,
+            dependencies=dependencies,
+            mock_imports=mock_imports,
+            timeout=timeout,
+        )
+    except Exception as e:
+        logger.exception(f"Orchestrator: CRITICAL ERROR during Quality Gate execution: {e}")
+        raise ValidationError(f"Quality Gate Infrastructure Failure: {str(e)}")
+    
+    eval_duration_ms = int((perf_counter() - start_eval) * 1000)
 
     final_score = eval_res["score"]
     reason = eval_res["reason"]
@@ -184,7 +193,9 @@ async def do_save_async(
         )
 
     logger.info(
-        f"Orchestrator: Quality Gate PASSED '{name}' (Score: {final_score:.1f}) | Logic Verification Duration: {eval_res.get('details', {}).get('runtime', {}).get('details', {}).get('duration_ms', 0)}ms"
+        f"Orchestrator: Quality Gate PASSED '{name}' (Score: {final_score:.1f}) | "
+        f"Total Eval: {eval_duration_ms}ms | "
+        f"Runtime: {eval_res.get('details', {}).get('runtime', {}).get('details', {}).get('duration_ms', 0)}ms"
     )
 
     # Calculate code hash for deduplication

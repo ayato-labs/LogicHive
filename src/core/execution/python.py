@@ -105,7 +105,10 @@ class EphemeralPythonExecutor(BaseExecutor):
             process_env["PYTHONPATH"] = ""
             process_env["PYTHONNOUSERSITE"] = "1"
 
+            import psutil
             memory_exceeded = False
+            done_event = asyncio.Event()
+
             try:
                 process = await asyncio.create_subprocess_exec(
                     *cmd,
@@ -117,26 +120,31 @@ class EphemeralPythonExecutor(BaseExecutor):
 
                 async def monitor_resources():
                     nonlocal memory_exceeded
-                    import psutil
-                    while process.returncode is None:
-                        try:
-                            parent = psutil.Process(process.pid)
-                            # Sum up memory of parent and all recursive children
-                            total_mem = parent.memory_info().rss
-                            for child in parent.children(recursive=True):
-                                try:
-                                    total_mem += child.memory_info().rss
-                                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                                    continue
+                    try:
+                        while not done_event.is_set():
+                            try:
+                                parent = psutil.Process(process.pid)
+                                if not parent.is_running():
+                                    break
+                                
+                                # Sum up memory of parent and all recursive children
+                                total_mem = parent.memory_info().rss
+                                for child in parent.children(recursive=True):
+                                    try:
+                                        total_mem += child.memory_info().rss
+                                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                                        continue
 
-                            if (total_mem / 1024 / 1024) > memory_limit_mb:
-                                logger.warning(f"Executor: Memory limit exceeded ({total_mem / 1024 / 1024:.1f}MB > {memory_limit_mb}MB). Killing process tree.")
-                                memory_exceeded = True
-                                self._kill_process_tree(process.pid)
+                                if (total_mem / 1024 / 1024) > memory_limit_mb:
+                                    logger.warning(f"Executor: Memory limit exceeded ({total_mem / 1024 / 1024:.1f}MB > {memory_limit_mb}MB). Killing process tree.")
+                                    memory_exceeded = True
+                                    self._kill_process_tree(process.pid)
+                                    break
+                            except (psutil.NoSuchProcess, psutil.AccessDenied):
                                 break
-                        except (psutil.NoSuchProcess, psutil.AccessDenied):
-                            break
-                        await asyncio.sleep(0.2)
+                            await asyncio.sleep(0.5) # Reduced frequency for stability
+                    except Exception as e:
+                        logger.error(f"Executor: Resource monitor crashed: {e}")
 
                 monitor_task = asyncio.create_task(monitor_resources())
 
@@ -155,7 +163,13 @@ class EphemeralPythonExecutor(BaseExecutor):
                         duration=time.time() - start_time,
                     )
                 finally:
-                    monitor_task.cancel()
+                    done_event.set()
+                    if not monitor_task.done():
+                        monitor_task.cancel()
+                        try:
+                            await monitor_task
+                        except asyncio.CancelledError:
+                            pass
 
                 if memory_exceeded:
                     return ExecutionResult(

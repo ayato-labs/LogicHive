@@ -1,4 +1,5 @@
 import logging
+from time import perf_counter
 
 from ...config import DEFAULT_VERIFICATION_TIMEOUT
 from ...execution.base import ExecutionStatus
