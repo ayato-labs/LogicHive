@@ -30,8 +30,15 @@ class SecurityStaticEvaluator(BaseEvaluator):
             visitor.visit(tree)
             visitor.check_sql_injection()
             issues = visitor.issues
+        except SyntaxError as e:
+            return EvaluationResult(
+                score=0.0, reason=f"Logic Error (Syntax Error): {e}", is_system_error=False
+            )
         except Exception as e:
-            return EvaluationResult(score=0.0, reason=f"Syntax error or AST parsing failed: {e}")
+            logger.error(f"SecurityStaticEvaluator: Structural analysis failed: {e}")
+            return EvaluationResult(
+                score=0.0, reason=f"Infrastructure Error (AST parsing): {e}", is_system_error=True
+            )
 
         if not issues:
             return EvaluationResult(

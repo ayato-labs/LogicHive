@@ -8,6 +8,7 @@ class EvaluationResult:
     score: float  # 0.0 to 100.0
     reason: str
     details: dict[str, Any] | None = None
+    is_system_error: bool = False
 
 
 class BaseEvaluator(ABC):
