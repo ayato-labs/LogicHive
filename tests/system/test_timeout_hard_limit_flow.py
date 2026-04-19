@@ -14,30 +14,25 @@ async def test_system_save_flow_timeout_behavior(test_db):
     description = "Test E2E timeout"
     
     # 1. Test Default Timeout (60s)
-    # We can't easily wait 60s in a system test, but we can verify it doesn't crash 
-    # and use instrumentation to see it's alive.
     res = await do_save_async(
         name=name, code=code, description=description, 
         test_code=test_code, timeout=None
     )
-    assert res["name"] == name
+    assert res is True
     
     # 2. Test Custom Timeout (80s)
-    # This proves the orchestrator accepts the parameter.
     res_custom = await do_save_async(
         name=name + "_custom", code=code, description=description, 
         test_code=test_code, timeout=80
     )
-    assert res_custom["name"] == name + "_custom"
+    assert res_custom is True
     
     # 3. Test Hard Limit Capping (150s -> 120s)
-    # Logic is internal to do_save_async. We check if it doesn't error out.
-    # Note: Orchestrator caps it to MAX_VERIFICATION_TIMEOUT (120).
     res_capped = await do_save_async(
         name=name + "_capped", code=code, description=description, 
         test_code=test_code, timeout=150
     )
-    assert res_capped["name"] == name + "_capped"
+    assert res_capped is True
 
 @pytest.mark.asyncio
 async def test_system_save_flow_timeout_rejection(test_db):

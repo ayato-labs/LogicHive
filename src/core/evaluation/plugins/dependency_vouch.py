@@ -45,13 +45,17 @@ class DependencyVouchEvaluator(BaseEvaluator):
             }
             return m.split(".")[0] in std
         
-        # 3. Load project context (manifests) - Search upwards from current file to find project root
-        project_root = Path(__file__).parent.parent.parent.parent # src/core/evaluation/plugins -> root
+        # 3. Load project context (manifests)
+        # Search relative to CWD first (good for tests/sandbox), then fallback to package-relative
+        cwd = os.getcwd()
+        project_root = Path(cwd)
+        
         declared_pkgs = self._load_manifest_dependencies(str(project_root))
         
-        # Fallback to CWD if project_root doesn't have manifests
+        # Fallback to hardcoded root if CWD has no manifests
         if not declared_pkgs:
-            declared_pkgs = self._load_manifest_dependencies(os.getcwd())
+            hardcoded_root = Path(__file__).parent.parent.parent.parent
+            declared_pkgs = self._load_manifest_dependencies(str(hardcoded_root))
 
         hallucinated = []
         for imp in imports:
@@ -60,7 +64,11 @@ class DependencyVouchEvaluator(BaseEvaluator):
             
             top_level = imp.split(".")[0]
             
-            # 1. Check manifests (REQUIRED for external libs)
+            # 1. Check if it's a local .py file or directory
+            if (Path(cwd) / f"{top_level}.py").exists() or (Path(cwd) / top_level / "__init__.py").exists():
+                continue
+            
+            # 2. Check manifests (REQUIRED for external libs)
             normalized_top = top_level.lower().replace("_", "-")
             if normalized_top in declared_pkgs:
                 continue

@@ -49,8 +49,9 @@ async def test_chaos_memory_bomb_resilience():
     Chaos: Verify that a memory bomb is killed by the resource monitor.
     """
     manager = EvaluationManager()
-    # Attempt to allocate a huge list
-    code = "def bomb():\n    # This will allocate ~800MB on 64-bit python\n    data = [0] * (100 * 1024 * 1024)\n    return len(data)"
+    # Use bytearray for immediate, contiguous memory allocation
+    # 800MB is well over the 128MB limit
+    code = "def bomb():\n    data = bytearray(800 * 1024 * 1024)\n    return len(data)"
     test_code = "bomb()"
     
     # Set a strict memory limit for this test
@@ -58,7 +59,7 @@ async def test_chaos_memory_bomb_resilience():
         code=code,
         language="python",
         test_code=test_code,
-        memory_limit_mb=128 # Very strict limit
+        memory_limit_mb=128
     )
     
     runtime_res = results["details"]["runtime"]
