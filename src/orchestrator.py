@@ -10,6 +10,7 @@ from core.config import (
     ENABLE_AUTO_BACKUP,
     GEMINI_API_KEY,
     GITHUB_TOKEN,
+    MAX_VERIFICATION_TIMEOUT,
     QUALITY_GATE_THRESHOLD,
 )
 from core.consolidation import LogicIntelligence
@@ -137,6 +138,7 @@ async def do_save_async(
     test_code: str = "",
     project: str = "default",
     mock_imports: list[str] = [],
+    timeout: int | None = None,
 ):
     """
     Includes LLM Quality Gate 2.0 (LLM + Static Analysis), RAG optimization, and versioning.
@@ -146,6 +148,11 @@ async def do_save_async(
         description = f"{description}\n\n[MOCK_VALIDATED: {', '.join(mock_imports)}]"
 
     # --- 1. Evaluate Logic Asset (New Plugin System) ---
+    # Enforce Hard Safety Limit on timeout if provided
+    if timeout is not None and timeout > MAX_VERIFICATION_TIMEOUT:
+        logger.warning(f"Orchestrator: Requested timeout {timeout}s exceeds Hard Limit {MAX_VERIFICATION_TIMEOUT}s. Capping.")
+        timeout = MAX_VERIFICATION_TIMEOUT
+
     eval_manager = EvaluationManager()
     eval_res = await eval_manager.evaluate_all(
         code,
@@ -155,6 +162,7 @@ async def do_save_async(
         test_code=test_code,
         dependencies=dependencies,
         mock_imports=mock_imports,
+        timeout=timeout,
     )
 
     final_score = eval_res["score"]
@@ -176,7 +184,7 @@ async def do_save_async(
         )
 
     logger.info(
-        f"Orchestrator: Quality Gate PASSED '{name}' (Score: {final_score:.1f})"
+        f"Orchestrator: Quality Gate PASSED '{name}' (Score: {final_score:.1f}) | Logic Verification Duration: {eval_res.get('details', {}).get('runtime', {}).get('details', {}).get('duration_ms', 0)}ms"
     )
 
     # Calculate code hash for deduplication

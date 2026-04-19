@@ -1,5 +1,6 @@
 import logging
 
+from ...config import DEFAULT_VERIFICATION_TIMEOUT
 from ...execution.base import ExecutionStatus
 from ...execution.factory import ExecutorFactory
 from ..base import BaseEvaluator, EvaluationResult
@@ -31,7 +32,7 @@ class RuntimeEvaluator(BaseEvaluator):
         test_code = kwargs.get("test_code", "")
         dependencies = kwargs.get("dependencies", [])
         mock_imports = kwargs.get("mock_imports", [])
-        timeout = kwargs.get("timeout", 45)
+        timeout = kwargs.get("timeout", DEFAULT_VERIFICATION_TIMEOUT)
 
         if not test_code:
             return EvaluationResult(
@@ -66,6 +67,7 @@ class RuntimeEvaluator(BaseEvaluator):
                     reason="Tests passed successfully in ephemeral environment.",
                     details={
                         "duration": result.duration,
+                        "duration_ms": int(result.duration * 1000) if result.duration else 0,
                         "stdout": result.logs.stdout,
                         "status": result.status.value
                     }
@@ -75,7 +77,10 @@ class RuntimeEvaluator(BaseEvaluator):
                 return EvaluationResult(
                     score=0.0,
                     reason=f"Critical Failure: Execution timed out after {timeout} seconds. Possible infinite loop.",
-                    details={"status": result.status.value}
+                    details={
+                        "status": result.status.value,
+                        "duration_ms": int(result.duration * 1000) if result.duration else 0
+                    }
                 )
 
             elif result.status == ExecutionStatus.FAILURE:

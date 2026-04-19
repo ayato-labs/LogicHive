@@ -58,6 +58,8 @@ SQLITE_DB_PATH = os.getenv("SQLITE_DB_PATH", str(DATA_DIR / "logichive.db"))
 
 # LogicHive Quality Gate & Storage Thresholds
 QUALITY_GATE_THRESHOLD = int(os.getenv("QUALITY_GATE_THRESHOLD", 70))
+DEFAULT_VERIFICATION_TIMEOUT = int(os.getenv("DEFAULT_VERIFICATION_TIMEOUT", 60))
+MAX_VERIFICATION_TIMEOUT = int(os.getenv("MAX_VERIFICATION_TIMEOUT", 120))
 
 # Backup Config (Opt-in)
 # デフォルトは False (ローカルのみ) です。GitHub同期を行う場合は .env で true に設定してください。

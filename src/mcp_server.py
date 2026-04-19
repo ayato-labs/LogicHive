@@ -132,6 +132,7 @@ async def save_function(
     test_code: str = "",
     project: str = "default",
     mock_imports: list[str] = [],
+    timeout: int = 60,
 ) -> str:
     """
     Saves a verified, high-quality code asset to the LogicHive vault for future reuse.
@@ -166,6 +167,7 @@ async def save_function(
         test_code: Pytest/Unit test code for automated validation.
         project: Project name for logically grouping code (defaults to 'default').
         mock_imports: List of modules to mock during registration to avoid timeouts (e.g. ['torch']).
+        timeout: Maximum execution time in seconds for the Quality Gate (Default 60s, Hard Limit 120s).
     """
     try:
         success = await do_save_async(
@@ -178,6 +180,7 @@ async def save_function(
             test_code=test_code,
             project=project,
             mock_imports=mock_imports,
+            timeout=timeout,
         )
         return (
             "Saved successfully to LogicHive" if success else "Failed (Unknown Error)"

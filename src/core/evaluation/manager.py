@@ -274,6 +274,10 @@ class EvaluationManager:
             "score": final_score,
             "reason": " | ".join(reasons),
             "details": {
-                k: {"score": v.score, "reason": v.reason} for k, v in results.items()
+                k: {
+                    "score": v.score, 
+                    "reason": v.reason,
+                    "details": v.details
+                } for k, v in results.items()
             },
         }
