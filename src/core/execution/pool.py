@@ -66,18 +66,37 @@ class PoolManager:
             logger.info("PoolManager: Pooling is disabled in config.")
             return
 
-        def _sync_cleanup():
+        def _async_cleanup_orchestrator():
+            """
+            Synchronous cleanup logic moved to a thread. 
+            Uses a 'rename-then-delete' strategy to make startup near-instant.
+            """
             try:
-                os.makedirs(self.base_dir, exist_ok=True)
-                # Cleanup old pools on startup
-                for item in self.base_dir.iterdir():
-                    if item.is_dir():
-                        shutil.rmtree(item, ignore_errors=True)
+                if self.base_dir.exists():
+                    # Move old pools to a temporary location for background deletion
+                    cleanup_path = self.base_dir.parent / f"pools_cleanup_{uuid.uuid4().hex[:8]}"
+                    try:
+                        self.base_dir.rename(cleanup_path)
+                        logger.info(f"PoolManager: Old pools moved to {cleanup_path.name} for background cleanup.")
+                        # Now delete the renamed folder
+                        shutil.rmtree(cleanup_path, ignore_errors=True)
+                        logger.info(f"PoolManager: Background cleanup of {cleanup_path.name} complete.")
+                    except OSError:
+                        # Fallback if rename fails (e.g. files in use)
+                        logger.warning("PoolManager: Rename failed, performing standard cleanup.")
+                        for item in self.base_dir.iterdir():
+                            if item.is_dir():
+                                shutil.rmtree(item, ignore_errors=True)
+
+                self.base_dir.mkdir(parents=True, exist_ok=True)
             except Exception as e:
                 logger.error(f"PoolManager: Initial cleanup failed: {e}")
 
-        # Run cleanup in a thread to keep MCP server responsive
-        await asyncio.to_thread(_sync_cleanup)
+        # Fire and forget the heavy cleanup in a separate thread so it doesn't block FastMCP lifespan
+        # We don't 'await' it here to ensure the MCP server becomes ready immediately.
+        import threading
+        cleanup_thread = threading.Thread(target=_async_cleanup_orchestrator, daemon=True)
+        cleanup_thread.start()
 
         logger.info(f"PoolManager: Initialized at {self.base_dir} (GPU Detected: {self.has_gpu})")
         # Initialize semaphore to limit concurrent 'uv' calls (preventing disk thrashing on Windows)
