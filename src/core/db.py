@@ -16,9 +16,12 @@ _creator_loop = None
 
 async def get_db_connection() -> aiosqlite.Connection:
     """
-    Returns a persistent shared SQLite connection.
     Includes loop-affinity check for Windows stability.
     """
+    import time
+
+    start_time = time.perf_counter()
+    logger.info("[TRACE] SQLite: Requesting DB connection...")
     global _global_db, _creator_loop
     current_loop = asyncio.get_running_loop()
 
@@ -40,6 +43,8 @@ async def get_db_connection() -> aiosqlite.Connection:
             await _global_db.execute("PRAGMA synchronous=NORMAL;")
             await _global_db.execute("PRAGMA busy_timeout=5000;")
 
+        duration = time.perf_counter() - start_time
+        logger.info(f"[TRACE] SQLite: DB connection acquired in {duration:.4f}s")
         return _global_db
 
 
@@ -60,7 +65,10 @@ async def close_db_connection():
 
 
 async def init_connection_pragmas(db: aiosqlite.Connection):
-    pass
+    """Initializes pragmas for a new connection. (Currently handled in get_db_connection)"""
+    logger.info(
+        "[TRACE] SQLite: Initializing connection pragmas (noop - moved to get_db_connection)"
+    )
 
 
 def retry_on_db_lock(max_retries: int = 5, base_delay: float = 0.1):

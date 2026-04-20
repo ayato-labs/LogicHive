@@ -48,6 +48,7 @@ class RuntimeEvaluator(BaseEvaluator):
             return EvaluationResult(
                 score=0.0,
                 reason=f"Infrastructure Error: No executor available for language '{language}'.",
+                is_system_error=True,
                 details={"status": "not_supported"},
             )
 
@@ -79,7 +80,8 @@ class RuntimeEvaluator(BaseEvaluator):
                 # Suggest environmental overhead as a possibility (User feedback Tip #2)
                 return EvaluationResult(
                     score=0.0,
-                    reason=f"Critical Failure: Execution timed out after {timeout} seconds. (Possible causes: Infinite loop, heavy imports, or environment overhead)",
+                    reason=f"Infrastructure Failure: Execution timed out after {timeout} seconds. (Possible causes: Infinite loop, heavy imports, or environment overhead)",
+                    is_system_error=True,
                     details={
                         "status": result.status.value,
                         "duration_ms": int(result.duration * 1000) if result.duration else 0,
@@ -91,7 +93,8 @@ class RuntimeEvaluator(BaseEvaluator):
             elif result.status == ExecutionStatus.MEMORY_LIMIT:
                 return EvaluationResult(
                     score=0.0,
-                    reason=f"Critical Failure: Memory limit exceeded ({memory_limit_mb}MB).",
+                    reason=f"Infrastructure Failure: Memory limit exceeded ({memory_limit_mb}MB).",
+                    is_system_error=True,
                     details={
                         "status": result.status.value,
                         "duration_ms": int(result.duration * 1000) if result.duration else 0,
@@ -99,7 +102,7 @@ class RuntimeEvaluator(BaseEvaluator):
                 )
 
             elif result.status == ExecutionStatus.FAILURE:
-                reason_msg = "Critical Failure: Logic error or failing test."
+                reason_msg = "Logic Error: Code execution failed or test case assertions failed."
                 if result.error:
                     reason_msg += f" [{result.error.name}] {result.error.value}"
 
@@ -116,8 +119,9 @@ class RuntimeEvaluator(BaseEvaluator):
             else:
                 # Infrastructure error
                 return EvaluationResult(
-                    score=10.0,
-                    reason=f"Infrastructure Warning: Execution environment error. {result.logs.stderr}",
+                    score=0.0,
+                    reason=f"Infrastructure Error: Execution environment error. {result.logs.stderr}",
+                    is_system_error=True,
                     details={"status": result.status.value},
                 )
 
@@ -125,6 +129,7 @@ class RuntimeEvaluator(BaseEvaluator):
             logger.exception("RuntimeEvaluator: Unexpected error during evaluation")
             return EvaluationResult(
                 score=0.0,
-                reason=f"Critical Evaluator Error: {str(e)}",
+                reason=f"Infrastructure Error: Unexpected evaluator crash. {str(e)}",
+                is_system_error=True,
                 details={"error_type": type(e).__name__},
             )

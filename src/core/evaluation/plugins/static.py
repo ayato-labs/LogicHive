@@ -100,8 +100,12 @@ class RuffEvaluator(BaseEvaluator):
 
         try:
             import shutil
+            import time
 
             from core.config import PROJECT_ROOT
+
+            start_time = time.perf_counter()
+            logger.info("[TRACE] RuffEvaluator: Starting code analysis")
 
             # 1. Search for ruff in PATH
             ruff_cmd = shutil.which("ruff")
@@ -135,6 +139,9 @@ class RuffEvaluator(BaseEvaluator):
             )
             stdout, stderr = await process.communicate(input=code.encode())
 
+            duration = time.perf_counter() - start_time
+            logger.info(f"[TRACE] RuffEvaluator: Execution completed in {duration:.4f}s")
+
             if process.returncode not in [0, 1]:  # Ruff returns 1 if it finds issues
                 # Check if ruff is installed/callable
                 error_msg = stderr.decode().strip() or stdout.decode().strip()
@@ -148,6 +155,8 @@ class RuffEvaluator(BaseEvaluator):
             # Scoring logic: Deduct points for each issue
             score = 100.0
             issue_summaries = []
+
+            logger.info(f"[TRACE] RuffEvaluator: Analyzing {len(issues)} reported issues.")
 
             # Group by code to avoid repetitiveness
             for issue in issues[:5]:  # Cap feedback to avoid token bloat
@@ -169,7 +178,8 @@ class RuffEvaluator(BaseEvaluator):
             )
 
         except Exception as e:
-            logger.warning(f"RuffEvaluator Error: {e}")
+            logger.error(f"[TRACE] RuffEvaluator: Failed during evaluation: {e}", exc_info=True)
+            # We skip ruff if it crashes, but we log the full trace for debugging
             return EvaluationResult(score=100.0, reason=f"Ruff check skipped due to error: {e}")
 
 

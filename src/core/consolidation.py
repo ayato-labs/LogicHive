@@ -65,6 +65,12 @@ class LogicIntelligence:
         NOTE: Per system architecture, this project uses gemini-embedding-001 exclusively.
         Input is truncated to stay within the 2,048 token limit.
         """
+        import time
+
+        start_time = time.perf_counter()
+        logger.info(
+            f"[TRACE] LogicIntelligence: Starting embedding generation (input_len={len(text)})"
+        )
         if not self.gemini_client:
             logger.warning("Consolidation: Gemini API Key missing for embeddings.")
             return []
@@ -78,16 +84,28 @@ class LogicIntelligence:
                 contents=[safe_text],
                 config=types.EmbedContentConfig(output_dimensionality=VECTOR_DIMENSION),
             )
+            duration = time.perf_counter() - start_time
+            logger.info(
+                f"[TRACE] LogicIntelligence: Embedding generated successfully in {duration:.4f}s"
+            )
             return response.embeddings[0].values
         except Exception as e:
-            logger.error(f"Consolidation: Gemini Embedding (001) failed: {e}")
-            return []
+            logger.error(
+                f"[TRACE] LogicIntelligence: Gemini Embedding (001) failed: {e}", exc_info=True
+            )
+            raise AIProviderError(f"Embedding generation failed: {e}")
 
     async def _call_llm_async(self, prompt: str, use_json: bool = True) -> Any:
         """
         Internal helper to route LLM calls to Gemini or Ollama and handle JSON extraction.
         """
+        import time
+
+        start_time = time.perf_counter()
         provider = await self._get_optimal_provider()
+        logger.info(
+            f"[TRACE] LogicIntelligence: Routing LLM call to '{provider}' (use_json={use_json})"
+        )
 
         if provider == "gemini":
             if not self.gemini_client:
@@ -120,19 +138,30 @@ class LogicIntelligence:
                     if start_idx != -1 and end_idx != -1:
                         json_str = text[start_idx : end_idx + 1]
                         parsed = json.loads(json_str)
+
+                        duration = time.perf_counter() - start_time
+                        logger.info(
+                            f"[TRACE] LogicIntelligence: Gemini response parsed in {duration:.4f}s"
+                        )
+
                         if isinstance(parsed, list):
                             return (
                                 parsed[0] if len(parsed) > 0 and isinstance(parsed[0], dict) else {}
                             )
                         return parsed if isinstance(parsed, dict) else {}
-                    return {}
-                except (json.JSONDecodeError, ValueError) as e:
+
                     logger.warning(
-                        f"Consolidation: Failed to parse JSON from {self.model_id}: {e}. Raw content: {text[:200]}..."
+                        f"[TRACE] LogicIntelligence: No JSON found in response from {self.model_id}"
                     )
                     return {}
+                except (json.JSONDecodeError, ValueError) as e:
+                    logger.error(
+                        f"[TRACE] LogicIntelligence: Failed to parse JSON from {self.model_id}: {e}. Raw content: {text[:500]}...",
+                        exc_info=True,
+                    )
+                    raise AIProviderError(f"JSON parsing failed: {e}")
             except Exception as e:
-                logger.error(f"Consolidation: Gemini call failed: {e}")
+                logger.error(f"[TRACE] LogicIntelligence: Gemini call failed: {e}", exc_info=True)
                 raise AIProviderError(f"Gemini generation failed: {e}")
 
         elif provider == "ollama":

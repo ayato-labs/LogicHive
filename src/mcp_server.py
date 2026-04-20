@@ -4,7 +4,11 @@ from fastmcp import FastMCP
 
 import orchestrator
 from core.exceptions import LogicHiveError, ValidationError
-from orchestrator import do_delete_async, do_save_async
+from orchestrator import (
+    do_delete_async,
+    do_get_verification_status,
+    do_save_async,
+)
 
 
 @asynccontextmanager
@@ -64,7 +68,7 @@ async def search_functions(
             is_draft = res.get("is_draft", False)
             name = res["name"]
             if is_draft:
-                name = f"⚠️ [AI-DRAFT] {name}"
+                name = f"[AI-DRAFT] {name}"
             sim = res.get("similarity", 0)
             rel = res.get("reliability_score", 0) * 100
             desc = res.get("description", "No description")
@@ -77,7 +81,7 @@ async def search_functions(
                 from core.system_info import SystemFingerprint
 
                 if SystemFingerprint.compare(stored_env, SystemFingerprint.get_current()):
-                    drift_warning = " ⚠️ [DRIFT]"
+                    drift_warning = " [DRIFT]"
 
             md += f"- **{name}{drift_warning}** (Match: {sim:.2f}, Reliability: {rel:.1f}%)\n"
             if is_draft:
@@ -191,7 +195,14 @@ async def save_function(
             mock_imports=mock_imports,
             timeout=timeout,
         )
-        return "Saved successfully to LogicHive" if success else "Failed (Unknown Error)"
+        return (
+            (
+                f"Asset '{name}' (Project: {project}) has been accepted and saved with status 'pending'.\n"
+                "Verification is running in the background. Use 'get_verification_status' to check progress."
+            )
+            if success
+            else "Failed to initiate save (Unknown Error)"
+        )
     except ValidationError as e:
         # Extract rich details for better transparency (User feedback Tip #1)
         details = e.details or {}
@@ -348,7 +359,7 @@ async def check_integrity(wait_for_previous: bool = False) -> str:
             idx_size = vector_manager.index.ntotal if vector_manager.index else 0
             if idx_size != count:
                 status.append(
-                    f"- ⚠️ **Desync Detected**: DB({count}) vs FAISS({idx_size}). Rebuild recommended."
+                    f"- **Desync Detected**: DB({count}) vs FAISS({idx_size}). Rebuild recommended."
                 )
             else:
                 status.append(f"- Sync Status: ✅ Optimal ({idx_size} vectors)")
@@ -364,7 +375,64 @@ async def check_integrity(wait_for_previous: bool = False) -> str:
         return "\n".join(status)
     except Exception as e:
         import traceback
+
         return f"Integrity Check Failed: {str(e)}\n\n{traceback.format_exc()}"
+
+
+@mcp.tool()
+async def get_verification_status(
+    name: str, project: str = "default", wait_for_previous: bool = False
+):
+    """
+    Checks the progress and detailed report of a background verification task.
+    Use this to see if a recently saved function passed the Quality Gate.
+    """
+    logger.info(
+        f"[TRACE] MCP: Tool 'get_verification_status' called for '{name}' [project={project}]"
+    )
+    try:
+        # Re-align with orchestrator's function name
+        f_data = await do_get_verification_status(name, project=project)
+
+        if f_data.get("status") == "not_found":
+            logger.warning(f"[TRACE] MCP: Asset '{name}' not found.")
+            return f_data["message"]
+
+        status = f_data.get("status", "unknown")
+        report = f_data.get("report")
+
+        md = f"### Verification Status: {name}\n"
+        md += f"- **Current Status**: {status.upper()}\n"
+        if status == "verified":
+            md += "Quality Gate passed. Asset is active in the vault.\n"
+        elif status == "pending":
+            md += "Verification is still in progress. Please check back shortly.\n"
+        elif status == "failed":
+            md += "Quality Gate rejected the asset. Review the report below for details.\n"
+        elif status == "error":
+            md += (
+                "A system error occurred during verification. Infrastructure might be unstable.\n"
+            )
+
+        if isinstance(report, dict):
+            md += "\n\n#### Detailed Report:\n"
+            if "error" in report:
+                md += f"**Error Details**: {report['error']}\n"
+            elif "reason" in report:
+                md += f"- **Reason**: {report.get('reason', 'N/A')}\n"
+                details = report.get("details", {})
+                for tool, res in details.items():
+                    md += f"- **{tool.title()}**: {res.get('score', 0):.1f} ({res.get('reason', 'N/A')})\n"
+            else:
+                import json
+
+                md += f"```json\n{json.dumps(report, indent=2)}\n```"
+        elif report:
+            md += f"\n\n#### Raw Report:\n```json\n{report}\n```"
+
+        return md
+    except Exception as e:
+        return f"Error retrieving status: {str(e)}"
 
 
 if __name__ == "__main__":

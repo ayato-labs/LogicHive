@@ -49,6 +49,7 @@ class DependencyVouchEvaluator(BaseEvaluator):
                 "typing",
                 "asyncio",
                 "logging",
+                "ast",
                 "pathlib",
                 "abc",
                 "collections",

@@ -41,10 +41,14 @@ class EphemeralPythonExecutor(BaseExecutor):
                 try:
                     child.kill()
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    pass
+                    logger.debug(
+                        f"[TRACE] Executor: Child process {child.pid} already gone while killing process tree."
+                    )
             parent.kill()
         except (psutil.NoSuchProcess, psutil.AccessDenied):
-            pass
+            logger.debug(
+                f"[TRACE] Executor: Parent process {pid} already gone while killing process tree."
+            )
 
     async def execute(
         self,
@@ -55,7 +59,10 @@ class EphemeralPythonExecutor(BaseExecutor):
         memory_limit_mb: int = 256,
         **kwargs,
     ) -> ExecutionResult:
-        start_time = time.time()
+        logger.info(
+            f"[TRACE] Executor: Starting execution [timeout={timeout}s, memory={memory_limit_mb}MB]"
+        )
+        start_time = time.perf_counter()
         dependencies = dependencies or []
         mock_imports = kwargs.get("mock_imports", [])
 
@@ -163,6 +170,9 @@ class EphemeralPythonExecutor(BaseExecutor):
                                     self._kill_process_tree(process.pid)
                                     break
                             except (psutil.NoSuchProcess, psutil.AccessDenied):
+                                logger.debug(
+                                    "[TRACE] Executor: Process vanished during resource monitoring."
+                                )
                                 break
                             await asyncio.sleep(0.5)  # Reduced frequency for stability
                     except Exception as e:
@@ -191,7 +201,9 @@ class EphemeralPythonExecutor(BaseExecutor):
                         try:
                             await monitor_task
                         except asyncio.CancelledError:
-                            pass
+                            logger.debug(
+                                "[TRACE] Executor: Resource monitor task cancelled safely."
+                            )
 
                 if memory_exceeded:
                     return ExecutionResult(
@@ -238,6 +250,11 @@ class EphemeralPythonExecutor(BaseExecutor):
                         value=f"Process exited with code {process.returncode}",
                         traceback=stderr,
                     )
+
+                duration = time.perf_counter() - start_time
+                logger.info(
+                    f"[TRACE] Executor: Process execution finished in {duration:.4f}s with status: {status}"
+                )
 
                 return ExecutionResult(
                     status=status,

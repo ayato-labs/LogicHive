@@ -10,7 +10,6 @@ from core.config import (
     ENABLE_AUTO_BACKUP,
     GEMINI_API_KEY,
     GITHUB_TOKEN,
-    MAX_VERIFICATION_TIMEOUT,
     QUALITY_GATE_THRESHOLD,
 )
 from core.consolidation import LogicIntelligence
@@ -122,6 +121,83 @@ async def do_delete_async(name: str, project: str = "default") -> bool:
 # --- MCP / REST API Implementation Wrappers ---
 
 
+async def _run_async_verification_pipeline(
+    name: str,
+    project: str,
+    code: str,
+    description: str,
+    tags: list[str],
+    language: str,
+    dependencies: list[str],
+    test_code: str,
+    mock_imports: list[str],
+    timeout: int | None,
+):
+    """Background task to run Quality Gate, metadata enrichment and embedding generation."""
+    try:
+        # 1. Quality Gate
+        eval_manager = EvaluationManager()
+        eval_res = await eval_manager.evaluate_all(
+            code,
+            language,
+            description=description,
+            tags=tags,
+            test_code=test_code,
+            dependencies=dependencies,
+            mock_imports=mock_imports,
+            timeout=timeout,
+        )
+
+        final_score = float(eval_res["score"])
+        is_system_error = eval_res.get("is_system_error", False)
+        status = "verified" if final_score >= QUALITY_GATE_THRESHOLD else "failed"
+        if is_system_error:
+            status = "error"
+
+        # 2. Metadata Enrichment (if needed)
+        intel = LogicIntelligence(GEMINI_API_KEY)
+        if not description or len(description) < DESCRIPTION_MIN_LENGTH or not tags:
+            enriched = await intel.optimize_metadata(code)
+            description = enriched.get("description", description)
+            tags = list(set(tags + enriched.get("tags", [])))
+
+        # 3. Embedding
+        search_doc = intel.construct_search_document(name, description, tags, code)
+        embedding = await intel.generate_embedding(search_doc)
+
+        # 4. Update DB with final results
+        await sqlite_storage.update_verification_status(
+            name,
+            project,
+            status=status,
+            report=eval_res,
+            reliability_score=final_score / 100.0,
+        )
+
+        # Update metadata if enriched
+        # Note: We might need a more general update method if we want to save enriched description/tags
+        # For now, let's just update the status/score/report.
+
+        # 5. Sync to Vector Store (if verified)
+        if status == "verified":
+            await vector_manager.upsert_vector(
+                name,
+                embedding,
+                metadata={"project": project, "language": language},
+                project=project,
+            )
+
+        logger.info(f"Orchestrator: Async verification FINISHED for '{name}' with status: {status}")
+
+    except Exception as e:
+        logger.error(
+            f"[TRACE] Orchestrator: Async verification FAILED for '{name}': {e}", exc_info=True
+        )
+        await sqlite_storage.update_verification_status(
+            name, project, status="error", report={"error": str(e)}
+        )
+
+
 async def do_save_async(
     name: str,
     code: str,
@@ -135,135 +211,75 @@ async def do_save_async(
     timeout: int | None = None,
 ):
     """
-    Includes LLM Quality Gate 2.0 (LLM + Static Analysis), RAG optimization, and versioning.
+    Asynchronously saves a function.
+    1. Checks for hash-based deduplication.
+    2. Saves with 'pending' status.
+    3. Kicks off background verification and returns immediately.
     """
-    # Mark as mock-validated if mock_imports are used
-    if mock_imports and "[MOCK_VALIDATED]" not in description:
-        description = f"{description}\n\n[MOCK_VALIDATED: {', '.join(mock_imports)}]"
-
-    # --- 1. Evaluate Logic Asset (New Plugin System) ---
-    # Enforce Hard Safety Limit on timeout if provided
-    if timeout is not None and timeout > MAX_VERIFICATION_TIMEOUT:
-        logger.warning(
-            f"Orchestrator: Requested timeout {timeout}s exceeds Hard Limit {MAX_VERIFICATION_TIMEOUT}s. Capping."
-        )
-        timeout = MAX_VERIFICATION_TIMEOUT
-
-    eval_manager = EvaluationManager()
-    from time import perf_counter
-
-    start_eval = perf_counter()
-
-    try:
-        eval_res = await eval_manager.evaluate_all(
-            code,
-            language,
-            description=description,
-            tags=tags,
-            test_code=test_code,
-            dependencies=dependencies,
-            mock_imports=mock_imports,
-            timeout=timeout,
-        )
-    except Exception as e:
-        logger.exception(f"Orchestrator: CRITICAL ERROR during Quality Gate execution: {e}")
-        raise ValidationError(f"Quality Gate Infrastructure Failure: {str(e)}")
-
-    eval_duration_ms = int((perf_counter() - start_eval) * 1000)
-
-    final_score = eval_res["score"]
-    reason = eval_res["reason"]
-
-    # Final Threshold Logic
-    threshold = QUALITY_GATE_THRESHOLD
-    # Allow drafts to bypass the hard threshold (they will have low reliability scores)
-    desc_upper = (description or "").upper()
-    if "[AI-DRAFT]" in desc_upper or "DRAFT" in desc_upper or "[AI_DRAFT]" in desc_upper:
-        threshold = 0.0
-
-    if eval_res.get("is_system_error"):
-        logger.error(f"Orchestrator: System Error during Quality Gate: {reason}")
-        # Use AIProviderError or a general infrastructure error
-        raise LogicHiveError(f"Infrastructure Failure: {reason}")
-
-    if final_score < threshold:
-        logger.warning(
-            f"Orchestrator: Quality Gate REJECTED '{name}' (Score: {final_score:.1f}, Reason: {reason})"
-        )
-        # Pass the full result including details back to the caller
-        raise ValidationError(
-            f"Quality Gate rejected asset: {reason}",
-            details={
-                "score": final_score,
-                "reason": reason,
-                "eval_details": eval_res.get("details", {}),
-            },
-        )
-
-    runtime_details = eval_res.get("details", {}).get("runtime", {}).get("details", {})
-    runtime_ms = runtime_details.get("duration_ms", 0) if isinstance(runtime_details, dict) else 0
-
-    logger.info(
-        f"Orchestrator: Quality Gate PASSED '{name}' (Score: {final_score:.1f}) | "
-        f"Total Eval: {eval_duration_ms}ms | "
-        f"Runtime: {runtime_ms}ms"
-    )
-
-    # Calculate code hash for deduplication
+    # 1. Deduplication Check
     code_hash = calculate_code_hash(code)
+    existing = await sqlite_storage.get_function_by_hash(code_hash, project)
+    if existing:
+        logger.info(
+            f"Orchestrator: Deduplication hit for '{name}' (Existing: '{existing['name']}')"
+        )
+        raise ValidationError(
+            f"Asset with identical logic is already registered as '{existing['name']}' in project '{project}'."
+        )
 
-    # 3. LLM Metadata Enrichment / Embedding prep
-    intel = LogicIntelligence(GEMINI_API_KEY)
-
-    # Enrich description and tags ONLY if missing or extremely short
-    if not description or len(description) < DESCRIPTION_MIN_LENGTH:
-        enriched = await intel.optimize_metadata(code)
-        description = enriched.get("description", description)
-        tags = list(set(tags + enriched.get("tags", [])))
-    elif not tags:
-        enriched = await intel.optimize_metadata(code)
-        tags = list(set(tags + enriched.get("tags", [])))
-
-    # 6. Generate Embedding for RAG
-    search_doc = intel.construct_search_document(name, description, tags, code)
-    embedding = await intel.generate_embedding(search_doc)
-
-    # Automatic Dependency Extraction
-    if not dependencies:
-        extracted = extract_dependencies(code, language=language)
-        if extracted:
-            logger.info(f"Orchestrator: Auto-extracted dependencies ({language}): {extracted}")
-            dependencies = extracted
-
-    # 7. Final data preparation and save
+    # 2. Immediate Save (Pending)
     from core.system_info import SystemFingerprint
 
+    # Automatic Dependency Extraction (Immediate)
+    if not dependencies:
+        extracted = extract_dependencies(code, language=language)
+        dependencies = extracted if extracted else []
+
     data = {
-        "id": str(uuid.uuid4()),  # Explicit ID if not existing, though upsert handles it
+        "id": str(uuid.uuid4()),
         "name": str(name),
         "code": str(code),
         "description": str(description),
         "language": str(language),
         "tags": tags,
-        "reliability_score": float(final_score) / 100.0,
-        "embedding": embedding,
+        "reliability_score": 0.0,
+        "embedding": None,  # Will be updated by bg task
         "code_hash": str(code_hash),
         "dependencies": dependencies,
         "test_code": test_code,
         "project": project,
         "env_fingerprint": SystemFingerprint.get_current(),
+        "verification_status": "pending",
+        "verification_report": None,
     }
 
+    # Initial save to DB
+    logger.info(
+        f"[TRACE] Orchestrator: Saving initial 'pending' record for '{name}' [project={project}]"
+    )
+    await sqlite_storage.upsert_function(data)
     save_result = await sqlite_storage.upsert_function(data)
+    if not save_result:
+        raise Exception("Failed to perform initial save to LogicHive vault.")
 
-    # 8. Trigger Background Auto-Backup (Fire-and-forget)
-    # ユーザーがバックアップを有効にしており、かつトークンが存在する場合のみ実行
-    if save_result and ENABLE_AUTO_BACKUP and GITHUB_TOKEN:
-        from storage.auto_backup import backup_manager
+    # 3. Kick off Background Verification
+    asyncio.create_task(
+        _run_async_verification_pipeline(
+            name,
+            project,
+            code,
+            description,
+            tags,
+            language,
+            dependencies,
+            test_code,
+            mock_imports,
+            timeout,
+        )
+    )
 
-        asyncio.create_task(backup_manager.process_backup(data))
-
-    return save_result
+    logger.info(f"Orchestrator: Save accepted for '{name}'. Verification is running in background.")
+    return True
 
 
 async def do_get_async(name: str, project: str = "default") -> dict[str, Any] | None:
@@ -361,6 +377,100 @@ async def check_integrity() -> dict[str, Any]:
         status = "Warning"
 
     return {"status": status, "details": details}
+
+
+async def _run_async_verification_pipeline(
+    name: str,
+    project: str,
+    code: str,
+    description: str,
+    tags: list[str],
+    language: str,
+    dependencies: list[str],
+    test_code: str,
+    mock_imports: dict[str, Any] | None = None,
+    timeout: int = 60,
+):
+    """
+    Background task to run the Quality Gate pipeline.
+    """
+    try:
+        logger.info(f"Orchestrator: Starting background verification for {name} [{project}]")
+
+        # 1. Initialize evaluation
+        from core.evaluation import EvaluationManager
+
+        eval_mgr = EvaluationManager()
+
+        # 2. Run Quality Gate (this is the heavy part)
+        report = await eval_mgr.evaluate_all(
+            code, language, name=name, project=project, description=description, tags=tags
+        )
+
+        status = "verified" if report.get("success") else "failed"
+        score = report.get("score", 0.0)
+
+        # 3. Update DB
+        await sqlite_storage.update_verification_status(
+            name=name,
+            project=project,
+            status=status,
+            report=report,
+            reliability_score=score,
+        )
+
+        logger.info(
+            f"Orchestrator: Background verification for {name} completed with status: {status}"
+        )
+
+    except Exception as e:
+        logger.error(f"Orchestrator: Background verification failed for {name}: {e}", exc_info=True)
+        await sqlite_storage.update_verification_status(
+            name=name, project=project, status="error", report={"error": str(e)}
+        )
+
+
+async def do_get_verification_status(name: str, project: str = "default") -> dict[str, Any]:
+    """Retrieves the verification status and report for a function."""
+    logger.info(
+        f"[TRACE] Orchestrator: Fetching verification status for '{name}' [project={project}]"
+    )
+    func = await sqlite_storage.get_function_by_name(name, project)
+    if not func:
+        logger.warning(f"[TRACE] Orchestrator: Asset '{name}' not found during status check.")
+        return {
+            "status": "not_found",
+            "message": f"Asset '{name}' not found in project '{project}'.",
+        }
+
+    return {
+        "name": name,
+        "project": project,
+        "status": func.get("verification_status", "unknown"),
+        "report": func.get("verification_report"),
+    }
+
+
+async def do_delete_async(name: str, project: str = "default") -> bool:
+    """
+    Asynchronously deletes a function and its vector matches.
+    """
+    logger.info(f"[TRACE] Orchestrator: Initiating deletion of '{name}' [project={project}]")
+    try:
+        # 1. Delete from SQLite (this should also handle history if needed)
+        success = await sqlite_storage.delete_function(name, project)
+
+        # 2. Delete from Vector Store
+        from storage.vector_store import vector_manager
+
+        await vector_manager.remove_vector(name, project)
+
+        logger.info(f"[TRACE] Orchestrator: Deletion of '{name}' successful: {success}")
+        return success
+    except Exception as e:
+        logger.error(f"[TRACE] Orchestrator: Failed to delete '{name}': {e}", exc_info=True)
+        # We re-raise to avoid swallowing the error as per user request
+        raise
 
 
 # --- End of Orchestrator ---

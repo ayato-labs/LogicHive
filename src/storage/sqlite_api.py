@@ -51,13 +51,12 @@ class SqliteStorage:
     @retry_on_db_lock()
     @with_write_lock
     async def upsert_function(self, function_data: dict[str, Any]) -> bool:
-        """
-        Inserts or updates a function using the shared singleton connection.
-        """
+        """Saves or updates function data. Returns True on success."""
+        name = function_data["name"]
+        project = function_data.get("project", "default")
+        logger.info(f"[TRACE] SQLite: upsert_function for '{name}' [project={project}] initiated")
         try:
             db = await get_db_connection()
-            project = function_data.get("project", "default")
-            name = function_data["name"]
 
             # 1. Check if name exists in specific project
             async with db.execute(
@@ -108,19 +107,34 @@ class SqliteStorage:
             await db.execute(
                 """
                 INSERT OR REPLACE INTO logichive_functions 
-                (id, project, name, code, description, language, tags, reliability_score, test_metrics, embedding, code_hash, version, dependencies, test_code, env_fingerprint)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (id, project, name, code, description, language, tags, reliability_score, test_metrics, embedding, code_hash, version, dependencies, test_code, env_fingerprint, verification_status, verification_report)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                data,
+                data
+                + (
+                    function_data.get("verification_status", "pending"),
+                    json.dumps(function_data.get("verification_report"))
+                    if function_data.get("verification_report")
+                    else None,
+                ),
             )
             await db.commit()
 
-            if "embedding" in function_data:
-                await vector_manager.add_vector(name, function_data["embedding"], project=project)
+            # Final safety check: Only add to vector store if we have a valid embedding
+            # Note: During initial save, embedding is usually None.
+            emb = function_data.get("embedding")
+            if emb is not None and isinstance(emb, list) and len(emb) > 0:
+                logger.info(f"[TRACE] SQLite: Adding vector for '{name}' to index.")
+                await vector_manager.add_vector(name, emb, project=project)
+            else:
+                logger.debug(
+                    f"[TRACE] SQLite: Skipping vector addition for '{name}' (no embedding provided)."
+                )
 
+            logger.info(f"[TRACE] SQLite: upsert_function for '{name}' completed successfully.")
             return True
         except Exception as e:
-            logger.error(f"SQLite: Failed to save function: {e}")
+            logger.error(f"[TRACE] SQLite: Failed to save function '{name}': {e}", exc_info=True)
             raise StorageError(f"Database upsert failed: {e}")
 
     async def list_all_functions(self) -> list[dict[str, Any]]:
@@ -130,8 +144,9 @@ class SqliteStorage:
                 rows = await cursor.fetchall()
                 return [self._process_row(dict(row)) for row in rows]
         except Exception as e:
-            logger.error(f"SQLite: Failed to list all functions: {e}")
-            return []
+            logger.error(f"[TRACE] SQLite: Failed to list all functions: {e}", exc_info=True)
+            # Re-raise instead of returning empty list to ensure traceability of failures
+            raise
 
     async def delete_function(self, name: str, project: str = "default") -> bool:
         try:
@@ -245,12 +260,65 @@ class SqliteStorage:
         if not row:
             return None
         processed = dict(row)
-        for field in ["tags", "test_metrics", "embedding", "dependencies", "env_fingerprint"]:
+        for field in [
+            "tags",
+            "test_metrics",
+            "embedding",
+            "dependencies",
+            "env_fingerprint",
+            "verification_report",
+        ]:
             if field in processed:
                 processed[field] = _safe_json_loads(processed[field], field)
         if "project" not in processed or not processed["project"]:
             processed["project"] = "default"
         return processed
+
+    async def get_function_by_hash(self, code_hash: str, project: str) -> dict[str, Any] | None:
+        """Finds a function by its code hash within a project."""
+        try:
+            db = await get_db_connection()
+            async with db.execute(
+                "SELECT * FROM logichive_functions WHERE code_hash = ? AND project = ?",
+                (code_hash, project),
+            ) as cursor:
+                row = await cursor.fetchone()
+                return self._process_row(dict(row)) if row else None
+        except Exception as e:
+            logger.error(f"SQLite: Failed to find by hash: {e}")
+            return None
+
+    async def update_verification_status(
+        self,
+        name: str,
+        project: str,
+        status: str,
+        report: dict[str, Any] = None,
+        reliability_score: float = None,
+    ):
+        """Updates the verification status and report for a function."""
+        try:
+            db = await get_db_connection()
+            fields = ["verification_status = ?", "updated_at = CURRENT_TIMESTAMP"]
+            params = [status]
+
+            if report:
+                fields.append("verification_report = ?")
+                params.append(json.dumps(report))
+            if reliability_score is not None:
+                fields.append("reliability_score = ?")
+                params.append(reliability_score)
+
+            params.extend([project, name])
+            sql = (
+                f"UPDATE logichive_functions SET {', '.join(fields)} WHERE project = ? AND name = ?"
+            )
+            await db.execute(sql, params)
+            await db.commit()
+            return True
+        except Exception as e:
+            logger.error(f"SQLite: Failed to update status for '{name}': {e}")
+            return False
 
     async def get_function_by_name(
         self, name: str, project: str = "default"
