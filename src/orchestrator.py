@@ -96,26 +96,28 @@ async def do_delete_async(name: str, project: str = "default") -> bool:
     """
     Orchestrates deletion from DB, Vector index, and archiving in Backup.
     """
+    logger.info(f"[TRACE] Orchestrator: Initiating deletion of '{name}' [project={project}]")
     try:
         # 1. Local DB deletion
         db_success = await sqlite_storage.delete_function(name, project=project)
         if not db_success:
+            logger.warning(f"[TRACE] Orchestrator: Failed to find/delete '{name}' in DB.")
             return False
 
         # 2. Vector index deletion (background)
         asyncio.create_task(vector_manager.remove_vector(name, project=project))
 
         # 3. Backup Archiving (background)
-        # ユーザーがバックアップを有効にしており、かつトークンが存在する場合のみ実行
         if ENABLE_AUTO_BACKUP and GITHUB_TOKEN:
             from storage.auto_backup import backup_manager
 
             asyncio.create_task(backup_manager.archive_asset(name, project=project))
 
+        logger.info(f"[TRACE] Orchestrator: Deletion of '{name}' successful.")
         return True
     except Exception as e:
-        logger.error(f"Orchestrator: Deletion failed for '{name}': {e}")
-        return False
+        logger.error(f"[TRACE] Orchestrator: Deletion failed for '{name}': {e}", exc_info=True)
+        raise
 
 
 # --- MCP / REST API Implementation Wrappers ---
@@ -135,6 +137,8 @@ async def _run_async_verification_pipeline(
 ):
     """Background task to run Quality Gate, metadata enrichment and embedding generation."""
     try:
+        logger.info(f"[TRACE] Orchestrator: Starting background verification for {name} [{project}]")
+        
         # 1. Quality Gate
         eval_manager = EvaluationManager()
         eval_res = await eval_manager.evaluate_all(
@@ -174,10 +178,6 @@ async def _run_async_verification_pipeline(
             reliability_score=final_score / 100.0,
         )
 
-        # Update metadata if enriched
-        # Note: We might need a more general update method if we want to save enriched description/tags
-        # For now, let's just update the status/score/report.
-
         # 5. Sync to Vector Store (if verified)
         if status == "verified":
             await vector_manager.upsert_vector(
@@ -187,7 +187,7 @@ async def _run_async_verification_pipeline(
                 project=project,
             )
 
-        logger.info(f"Orchestrator: Async verification FINISHED for '{name}' with status: {status}")
+        logger.info(f"[TRACE] Orchestrator: Async verification FINISHED for '{name}' with status: {status}")
 
     except Exception as e:
         logger.error(
@@ -379,55 +379,6 @@ async def check_integrity() -> dict[str, Any]:
     return {"status": status, "details": details}
 
 
-async def _run_async_verification_pipeline(
-    name: str,
-    project: str,
-    code: str,
-    description: str,
-    tags: list[str],
-    language: str,
-    dependencies: list[str],
-    test_code: str,
-    mock_imports: dict[str, Any] | None = None,
-    timeout: int = 60,
-):
-    """
-    Background task to run the Quality Gate pipeline.
-    """
-    try:
-        logger.info(f"Orchestrator: Starting background verification for {name} [{project}]")
-
-        # 1. Initialize evaluation
-        from core.evaluation import EvaluationManager
-
-        eval_mgr = EvaluationManager()
-
-        # 2. Run Quality Gate (this is the heavy part)
-        report = await eval_mgr.evaluate_all(
-            code, language, name=name, project=project, description=description, tags=tags
-        )
-
-        status = "verified" if report.get("success") else "failed"
-        score = report.get("score", 0.0)
-
-        # 3. Update DB
-        await sqlite_storage.update_verification_status(
-            name=name,
-            project=project,
-            status=status,
-            report=report,
-            reliability_score=score,
-        )
-
-        logger.info(
-            f"Orchestrator: Background verification for {name} completed with status: {status}"
-        )
-
-    except Exception as e:
-        logger.error(f"Orchestrator: Background verification failed for {name}: {e}", exc_info=True)
-        await sqlite_storage.update_verification_status(
-            name=name, project=project, status="error", report={"error": str(e)}
-        )
 
 
 async def do_get_verification_status(name: str, project: str = "default") -> dict[str, Any]:
@@ -451,26 +402,6 @@ async def do_get_verification_status(name: str, project: str = "default") -> dic
     }
 
 
-async def do_delete_async(name: str, project: str = "default") -> bool:
-    """
-    Asynchronously deletes a function and its vector matches.
-    """
-    logger.info(f"[TRACE] Orchestrator: Initiating deletion of '{name}' [project={project}]")
-    try:
-        # 1. Delete from SQLite (this should also handle history if needed)
-        success = await sqlite_storage.delete_function(name, project)
-
-        # 2. Delete from Vector Store
-        from storage.vector_store import vector_manager
-
-        await vector_manager.remove_vector(name, project)
-
-        logger.info(f"[TRACE] Orchestrator: Deletion of '{name}' successful: {success}")
-        return success
-    except Exception as e:
-        logger.error(f"[TRACE] Orchestrator: Failed to delete '{name}': {e}", exc_info=True)
-        # We re-raise to avoid swallowing the error as per user request
-        raise
 
 
 # --- End of Orchestrator ---
