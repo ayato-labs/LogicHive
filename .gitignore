@@ -25,35 +25,11 @@ last_run.txt
 
 # Build and Temp
 build/
-# Private Folders (Local Only)
-.pytest_cache/
-.ruff_cache/
-.venv/
-.vscode/
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-
-# Environment and Data
-.env
-.env.*
-*.db
-*.db-shm
-*.db-wal
-logichive.db
-faiss_index.bin
-faiss_mapping.json
-test_*.db
-test_faiss_*.bin
-test_faiss_*.json
-last_run.txt
-*.txt
-
-# Build and Temp
-build/
 dist/
 tmp_storage/
+*.egg-info/
+.installed.cfg
+*.egg
 
 # Node/Frontend
 node_modules/
@@ -62,5 +38,5 @@ node_modules/
 .DS_Store
 Thumbs.db
 
-# LogicHive Data Storage
+# LogicHive Data Storage (contains large binaries and sandbox environments)
 storage/
