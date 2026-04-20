@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastmcp import FastMCP
@@ -9,6 +10,8 @@ from orchestrator import (
     do_get_verification_status,
     do_save_async,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
